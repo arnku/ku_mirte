@@ -2,6 +2,8 @@ import xml.etree.ElementTree as ET
 import cv2
 import os
 
+world_name = 'asger_world_test.world'
+
 aruco_master_obj_text = """
 mtllib aruco_master.mtl
 o Cube
@@ -127,17 +129,17 @@ def update_aruco_models(root, aruco_dict):
         # Append the model to the world element
         world_element.append(aruco_xml(id, data['position'], data['rotation']))
 
-        os.makedirs(f'/home/arn/ros_ws/src/ku_mirte/models/aruco_{id}/meshes', exist_ok=True)
-        
-        generate_aruco_marker(id, f'/home/arn/ros_ws/src/ku_mirte/models/aruco_{id}/meshes')
+        model_path = os.path.join(os.path.dirname(__file__), 'models', f'aruco_{id}', 'meshes')
+        os.makedirs(model_path, exist_ok=True)    
+        generate_aruco_marker(id, model_path)
 
         # Generate the obj and mtl files
         aruco_obj_text = aruco_master_obj_text.replace('aruco_master', f'aruco_{id}')
         aruco_mtl_text = aruco_master_mtl_text.replace('aruco_marker_master.png', f'aruco_marker_{id}.png')
 
-        with open(f'/home/arn/ros_ws/src/ku_mirte/models/aruco_{id}/meshes/aruco_{id}.obj', 'w') as f:
+        with open(os.path.join(model_path, f'aruco_{id}.obj'), 'w') as f:
             f.write(aruco_obj_text)
-        with open(f'/home/arn/ros_ws/src/ku_mirte/models/aruco_{id}/meshes/aruco_{id}.mtl', 'w') as f:
+        with open(os.path.join(model_path, f'aruco_{id}.mtl'), 'w') as f:
             f.write(aruco_mtl_text)
 
 
@@ -145,7 +147,7 @@ def save_world_file(tree, world_file_path):
     tree.write(world_file_path)
 
 def main():
-    world_file_path = '/home/arn/ros_ws/src/ku_mirte/worlds/asger_world_test.world'
+    world_file_path = os.path.join(os.path.dirname(__file__), 'worlds', world_name)
     aruco_dict = {
         0: {'position': [1, 1, 0.1], 'rotation': [1.5708, 0, 0]},
         1: {'position': [2, 2, 0.1], 'rotation': [1.5708, 0, 0]},
