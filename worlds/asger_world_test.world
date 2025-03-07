@@ -1,0 +1,25 @@
+<sdf version="1.7">
+    <world name="default">
+        <light name="directionallight" type="directional">
+            <pose>3.14919 1.1553 2 0 -0 0</pose>
+            <cast_shadows>false</cast_shadows>
+            <intensity>1</intensity>
+            <direction>0 0 -1</direction>
+            <diffuse>0.8 0.8 0.8 1</diffuse>
+            <specular>0.2 0.2 0.2 1</specular>
+            <attenuation>
+                <range>1000</range>
+                <linear>0.01</linear>
+                <constant>0.90000000000000002</constant>
+                <quadratic>0.001</quadratic>
+            </attenuation>
+            <spot>
+                <inner_angle>0</inner_angle>
+                <outer_angle>0</outer_angle>
+                <falloff>0</falloff>
+            </spot>
+        </light>
+
+
+        <model name="aruco_code_0"><static>1</static><pose>1 1 0.1 1.5708 0 0</pose><link name="link_aruco_0"><collision name="collision_aruco_0"><geometry><mesh><scale>0.1 0.1 0.1</scale><uri>model://aruco_0/meshes/aruco_0.obj</uri></mesh></geometry></collision><visual name="visual_aruco_0"><geometry><mesh><pose>0 0 0.1 0 0 0</pose><scale>0.1 0.1 0.1</scale><uri>model://aruco_0/meshes/aruco_0.obj</uri></mesh></geometry></visual></link></model><model name="aruco_code_1"><static>1</static><pose>2 2 0.1 1.5708 0 0</pose><link name="link_aruco_1"><collision name="collision_aruco_1"><geometry><mesh><scale>0.1 0.1 0.1</scale><uri>model://aruco_1/meshes/aruco_1.obj</uri></mesh></geometry></collision><visual name="visual_aruco_1"><geometry><mesh><pose>0 0 0.1 0 0 0</pose><scale>0.1 0.1 0.1</scale><uri>model://aruco_1/meshes/aruco_1.obj</uri></mesh></geometry></visual></link></model></world>
+</sdf>
