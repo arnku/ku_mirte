@@ -1,6 +1,7 @@
 import xml.etree.ElementTree as ET
 import cv2
 import os
+import numpy as np
 
 world_name = 'asger_world_test.world'
 
@@ -60,16 +61,28 @@ def parse_world_file(world_file_path):
     root = tree.getroot()
     return tree, root
 
-def generate_aruco_marker(id, file_path, size=1024):
+def generate_aruco_marker(id, file_path, marker_size=900, image_size=1024):
     # Load the predefined dictionary
     aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 
     # Generate the marker
-    marker_image = cv2.aruco.drawMarker(aruco_dict, id, size)
+    marker_image = np.zeros((marker_size, marker_size), dtype=np.uint8)
+    cv2.aruco.drawMarker(aruco_dict, id, marker_size, marker_image)
 
-    # Save the marker image
+    # Create a white canvas
+    canvas = np.ones((image_size, image_size), dtype=np.uint8) * 255
+
+    # Calculate the position to center the marker
+    start = (image_size - marker_size) // 2
+    end = start + marker_size
+
+    # Place the marker in the center
+    canvas[start:end, start:end] = marker_image
+
+    # Save the final image
     filename = f'aruco_marker_{id}.png'
-    cv2.imwrite(os.path.join(file_path, filename), marker_image)
+    cv2.imwrite(os.path.join(file_path, filename), canvas)
+
 
 def aruco_xml(id, position, rotation):
     # Create model

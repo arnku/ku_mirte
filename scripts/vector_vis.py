@@ -3,6 +3,7 @@ from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Quaternion
 from std_msgs.msg import Header
+import numpy as np
 
 class OdometryPublisher(Node):
     def __init__(self, topic_name, frame_id='odom', rate=0.1):
@@ -22,6 +23,17 @@ class OdometryPublisher(Node):
         """Update the Odometry data dynamically."""
         self.current_position = position
         self.current_orientation = orientation
+
+    def odemetry_numpy(self, position: np.array, orientation: np.array):
+        """
+        Update the Odometry data dynamically using numpy arrays.
+        Args: 
+            position (np.array): The position of the robot in 3D space (x, y, z).
+            orientation (np.array): The orientation of the robot in 3D space (x, y, z, w).
+        """
+        self.current_position = Point(x=position[0], y=position[1], z=position[2])
+        norm = np.linalg.norm(orientation)
+        self.current_orientation = Quaternion(x=orientation[0] / norm, y=orientation[1] / norm, z=orientation[2] / norm, w=0.0)
 
     def publish_odometry(self):
         # Create Odometry message
