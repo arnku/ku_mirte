@@ -8,7 +8,7 @@
   <arg name="depth_camera_enable" default="True"/>
 
   <arg name="gui" default="True"/>
-  <arg name="generated_world" default="$(find-pkg-share ku_mirte)/worlds/asger_world_test.world"/>
+  <arg name="generated_world" default="$(find-pkg-share ku_mirte)/worlds/asger_world_urdf.world"/>
 
   <!-- Launch gazebo -->
   <set_env name="GAZEBO_MODEL_PATH" value="$(env GAZEBO_MODEL_PATH ''):$(find-pkg-share ku_mirte)/models"/>
