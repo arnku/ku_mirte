@@ -77,6 +77,13 @@ def aruco_xml(id, position, box_size):
     # Add link element
     link = ET.SubElement(model, 'link', name=f'link_aruco_{id}')
     
+    # Add collision element inside link
+    collision = ET.SubElement(link, 'collision', name=f'collision_aruco_{id}')
+    col_geometry = ET.SubElement(collision, 'geometry')
+    col_box = ET.SubElement(col_geometry, 'box')
+    col_box_size = ET.SubElement(col_box, 'size')
+    col_box_size.text = f'{box_size[0]} {box_size[1]} {box_size[2]}'
+
     # Add visual element inside link
     visual = ET.SubElement(link, 'visual', name=f'visual_aruco_{id}')
     geometry = ET.SubElement(visual, 'geometry')

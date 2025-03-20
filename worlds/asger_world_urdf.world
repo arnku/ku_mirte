@@ -20,5 +20,59 @@
             </spot>
         </light>
 
-        <model name="aruco_code_0"><static>1</static><pose>0 0 0.2 0 0 0</pose><link name="link_aruco_0"><visual name="visual_aruco_0"><geometry><box><size>0.4 0.4 0.4</size></box></geometry><material><script><uri>model://aruco_0/materials/scripts</uri><uri>model://aruco_0/materials/textures</uri><name>Aruco/Aruco_0</name></script></material></visual></link></model><model name="aruco_code_1"><static>1</static><pose>2 2 0.2 0 0 0</pose><link name="link_aruco_1"><visual name="visual_aruco_1"><geometry><box><size>0.4 0.4 0.4</size></box></geometry><material><script><uri>model://aruco_1/materials/scripts</uri><uri>model://aruco_1/materials/textures</uri><name>Aruco/Aruco_1</name></script></material></visual></link></model></world>
+        <model name="aruco_code_0">
+            <static>1</static>
+            <pose>0 0 0.2 0 0 0</pose>
+            <link name="link_aruco_0">
+                <collision name="collision_aruco_0">
+                    <geometry>
+                        <box>
+                            <size>0.4 0.4 0.4</size>
+                        </box>
+                    </geometry>
+                </collision>
+                <visual name="visual_aruco_0">
+                    <geometry>
+                        <box>
+                            <size>0.4 0.4 0.4</size>
+                        </box>
+                    </geometry>
+                    <material>
+                        <script>
+                            <uri>model://aruco_0/materials/scripts</uri>
+                            <uri>model://aruco_0/materials/textures</uri>
+                            <name>Aruco/Aruco_0</name>
+                        </script>
+                    </material>
+                </visual>
+            </link>
+        </model>
+        <model name="aruco_code_1">
+            <static>1</static>
+            <pose>2 2 0.2 0 0 0</pose>
+            <link name="link_aruco_1">
+                <collision name="collision_aruco_1">
+                    <geometry>
+                        <box>
+                            <size>0.4 0.4 0.4</size>
+                        </box>
+                    </geometry>
+                </collision>
+                <visual name="visual_aruco_1">
+                    <geometry>
+                        <box>
+                            <size>0.4 0.4 0.4</size>
+                        </box>
+                    </geometry>
+                    <material>
+                        <script>
+                            <uri>model://aruco_1/materials/scripts</uri>
+                            <uri>model://aruco_1/materials/textures</uri>
+                            <name>Aruco/Aruco_1</name>
+                        </script>
+                    </material>
+                </visual>
+            </link>
+        </model>
+    </world>
 </sdf>
