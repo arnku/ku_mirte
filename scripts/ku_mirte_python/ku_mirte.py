@@ -6,6 +6,7 @@ import time
 
 from robot_pos_sub import PositionSubscriber
 from camera_sub import CameraSubscriber
+from lidar_sub import LidarSubscriber
 from vector_vis import OdometryPublisher
 from point_cloud_vis import PointCloudPublisher
 from drive_pub import MovementPublisher
@@ -15,6 +16,7 @@ class KU_Mirte:
         rclpy.init()
         self.robot_pos_sub = PositionSubscriber()
         self.camera_sub = CameraSubscriber()
+        self.lidar_sub = LidarSubscriber()
         self.odometry_pub = OdometryPublisher(odometry_topic)
         self.point_cloud_pub = PointCloudPublisher(point_cloud_topic)
         self.movement_pub = MovementPublisher()
@@ -33,6 +35,8 @@ class KU_Mirte:
             self.robot_pos_sub.destroy_node()
         if self.camera_sub:
             self.camera_sub.destroy_node()
+        if self.lidar_sub:
+            self.lidar_sub.destroy_node()
         if self.odometry_pub:
             self.odometry_pub.destroy_node()
         if self.point_cloud_pub:
@@ -75,7 +79,6 @@ class KU_Mirte:
 
     def _stop_drive_thread(self):
         if self.drive_thread:
-            self.movement_pub.stop()
             self.movement_pub.shutdown()
             self.drive_thread.join()
             self.drive_thread_executor.shutdown()
@@ -109,6 +112,23 @@ class KU_Mirte:
         """Returns the most recent image from the camera."""
         rclpy.spin_once(self.camera_sub)
         return self.camera_sub.image()
+    
+    def get_lidar_ranges(self):
+        """Returns the most recent lidar ranges."""
+        rclpy.spin_once(self.lidar_sub)
+        return self.lidar_sub.ranges()
+    
+    def get_lidar_section(self, start_angle, end_angle):
+        """
+        Returns the lidar ranges for a given angle section.
+        The start_angle and end_angle are in radians from -pi to pi. 
+        Here 0 is straight ahead, pi/2 is to the left, and -pi/2 is to the right.
+
+        Parameters:
+            start_angle (float): The start angle of the section in radians.
+            end_angle (float): The end angle of the section in radians.
+        """
+        return self.lidar_sub.angle_section(start_angle, end_angle)
 
     def set_odometry(self, position, rotation):
         """Sets the odometry position and rotation."""
