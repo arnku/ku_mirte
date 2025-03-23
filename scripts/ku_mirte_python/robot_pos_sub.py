@@ -1,37 +1,30 @@
 import rclpy
 from rclpy.node import Node
-from tf2_msgs.msg import TFMessage
+from nav_msgs.msg import Odometry  # Updated import
 
 class PositionSubscriber(Node):
-    def __init__(self, frame_id='odom', child_frame_id='base_link'):
-        super().__init__('tf_listener_node')
-        
-        self.frame_id = frame_id
-        self.child_frame_id = child_frame_id
+    def __init__(self):
+        super().__init__('odom_listener_node')
 
         self.latest_transform = None
         self.latest_rotation = None
 
-        # Create a subscription to the /tf topic
+        # Create a subscription to the /odom topic
         self.tf_subscription = self.create_subscription(
-            TFMessage,
-            '/tf',
+            Odometry,  # Updated message type
+            '/odom',
             self.tf_callback,
             10  # Queue size
         )
 
     def tf_callback(self, msg):
-        # Iterate through each transform in the message
-        for transform in msg.transforms:
-            # Only process the transform from 'odom' to 'base_link'
-            if transform.header.frame_id == self.frame_id and transform.child_frame_id == self.child_frame_id:
-                # Extract the translation and rotation
-                self.latest_transform = transform.transform.translation
-                self.latest_rotation = transform.transform.rotation
+        # Extract the position and orientation from the Odometry message
+        self.latest_transform = msg.pose.pose.position
+        self.latest_rotation = msg.pose.pose.orientation
 
-                # Log the received transform
-                # self.get_logger().info(f"Received transform: x={self.latest_transform.x}, y={self.latest_transform.y}, z={self.latest_transform.z}")
-                # self.get_logger().info(f"Rotation: x={self.latest_rotation.x}, y={self.latest_rotation.y}, z={self.latest_rotation.z}, w={self.latest_rotation.w}")
+        # Log the received data
+        #self.get_logger().info(f"Position: x={self.latest_transform.x}, y={self.latest_transform.y}, z={self.latest_transform.z}")
+        #self.get_logger().info(f"Rotation: x={self.latest_rotation.x}, y={self.latest_rotation.y}, z={self.latest_rotation.z}, w={self.latest_rotation.w}")
 
     def get_position(self):
         return self.latest_transform
@@ -48,7 +41,8 @@ def main():
     # Loop and spin non-blocking
     while rclpy.ok():
         # Spin once to process incoming messages
-        rclpy.spin_once(position_node, timeout_sec=0.1)  # Adjust the timeout to control the loop rate
+        print("Spinning")
+        rclpy.spin_once(position_node, timeout_sec=None)  # Adjust the timeout to control the loop rate
 
         # Retrieve and process position and rotation
         transform = position_node.get_position()

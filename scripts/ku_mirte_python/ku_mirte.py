@@ -24,7 +24,14 @@ class KU_Mirte:
         self.drive_thread = None
         self.drive_thread_executor = None
         self._start_drive_thread()
-        
+
+        rclpy.spin_once(self.robot_pos_sub)
+        rclpy.spin_once(self.camera_sub)
+        rclpy.spin_once(self.lidar_sub)
+
+        self.k_matrix = self.camera_sub.k_matrix # Camera intrinsic matrix
+        self.d_matrix = self.camera_sub.d_matrix # Camera distortion
+        self.p_matrix = self.camera_sub.p_matrix # Camera projection matrix
 
     def __del__(self):
         """Ensure that nodes are properly destroyed when the object is deleted."""
@@ -132,7 +139,7 @@ class KU_Mirte:
 
     def set_odometry(self, position, rotation):
         """Sets the odometry position and rotation."""
-        self.odometry_pub.odemetry_numpy(position, rotation)
+        self.odometry_pub.set_position(position, rotation)
         rclpy.spin_once(self.odometry_pub)
     
     def set_point_cloud(self, points, colors=None):

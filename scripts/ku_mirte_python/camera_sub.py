@@ -1,8 +1,10 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from sensor_msgs.msg import CameraInfo
 from cv_bridge import CvBridge
 import cv2
+import numpy as np
 
 class CameraSubscriber(Node):
     def __init__(self):
@@ -11,24 +13,59 @@ class CameraSubscriber(Node):
         self.subscription = self.create_subscription(
             Image,
             '/camera/image_raw',
-            self.listener_callback,
+            self._listener_callback,
             10  # Queue size
         )
         self.subscription  # prevent unused variable warning
         
+        # Create a one-time subscriber to the 'camera/camera_info' topic
+        self.camera_info_subscription = self.create_subscription(
+            CameraInfo,
+            '/camera/camera_info',
+            self._camera_info_callback,
+            10  # Queue size
+        )
+        self.camera_info_subscription  # prevent unused variable warning
+        
+        # Initialize variables to store K and P matrices
+        self.k_matrix = None # intrinsic matrix 
+        self.d_matrix = None # distortion matrix
+        self.p_matrix = None # projection matrix
+
         # Initialize CvBridge to convert ROS image messages to OpenCV
         self.bridge = CvBridge()
 
         # Initialize a variable to store the latest image
         self.latest_image = None
 
-    def listener_callback(self, msg):
+        # Spin until camera info is received
+        while self.k_matrix is None:
+            rclpy.spin_once(self) 
+        
+        # Destroy the subscription after receiving the data
+        self.destroy_subscription(self.camera_info_subscription)
+
+
+    def _listener_callback(self, msg):
         """Callback function to process incoming camera images."""
         try:
             # Convert the ROS Image message to a CV2 image (BGR format)
             self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().error(f"Failed to convert image: {e}")
+
+    def _camera_info_callback(self, msg):
+        """Callback function to process incoming camera info."""
+        #self.get_logger().info("Received camera info")
+        try:
+            # Extract K and P matrices from the CameraInfo message
+            self.k_matrix = np.array(msg.k).reshape((3, 3))
+            self.d_matrix = np.array(msg.d)
+            self.p_matrix = np.array(msg.p)
+
+            # Destroy the subscription after receiving the data
+        except Exception as e:
+            self.get_logger().error(f"Failed to process camera info: {e}")
 
     def image(self):
         """Returns the most recent image received."""

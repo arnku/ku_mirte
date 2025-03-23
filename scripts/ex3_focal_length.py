@@ -75,3 +75,6 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
 
 
     frame += 1
+
+cv2.destroyAllWindows() # Close the OpenCV windows
+del mirte # Clean up the ROS node
