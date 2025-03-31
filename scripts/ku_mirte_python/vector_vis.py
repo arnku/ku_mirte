@@ -35,11 +35,12 @@ class OdometryPublisher(Node):
         self.publisher.publish(odometry_msg)
     
     def set_position(self, position, orientation):
-        if isinstance(position, np.ndarray):
+        if isinstance(position, np.ndarray) or isinstance(position, list):
             position = Point(x=float(position[0]), y=float(position[1]), z=float(position[2]))
-        if isinstance(orientation, np.ndarray):
+        if isinstance(orientation, np.ndarray) or isinstance(orientation, list):
             orientation = Quaternion(x=float(orientation[0]), y=float(orientation[1]), z=float(orientation[2]), w=float(orientation[3]))
         
+
         self.current_position, self.current_orientation= self.transform_point(position, orientation)
     
 

@@ -12,13 +12,15 @@ from point_cloud_vis import PointCloudPublisher
 from drive_pub import MovementPublisher
 
 class KU_Mirte:
-    def __init__(self, odometry_topic='test_odometry', point_cloud_topic='test_point_cloud'):
+    def __init__(self):
         rclpy.init()
         self.robot_pos_sub = PositionSubscriber()
         self.camera_sub = CameraSubscriber()
         self.lidar_sub = LidarSubscriber()
-        self.odometry_pub = OdometryPublisher(odometry_topic)
-        self.point_cloud_pub = PointCloudPublisher(point_cloud_topic)
+        self.odometry_pub_mirte = OdometryPublisher('odometry_mirte', 'base_link')
+        self.odometry_pub_world = OdometryPublisher('odometry_world', 'odom')
+        self.pointcloud_pub_mirte = PointCloudPublisher('pointcloud_mirte', 'base_link')
+        self.pointcloud_pub_world = PointCloudPublisher('pointcloud_world', 'odom')
         self.movement_pub = MovementPublisher()
 
         self.drive_thread = None
@@ -38,17 +40,21 @@ class KU_Mirte:
         
         self._stop_drive_thread()
 
-        if self.robot_pos_sub:
+        if hasattr(self, 'robot_pos_sub') and self.robot_pos_sub:
             self.robot_pos_sub.destroy_node()
-        if self.camera_sub:
+        if hasattr(self, 'camera_sub') and self.camera_sub:
             self.camera_sub.destroy_node()
-        if self.lidar_sub:
+        if hasattr(self, 'lidar_sub') and self.lidar_sub:
             self.lidar_sub.destroy_node()
-        if self.odometry_pub:
-            self.odometry_pub.destroy_node()
-        if self.point_cloud_pub:
-            self.point_cloud_pub.destroy_node()
-        if self.movement_pub:
+        if hasattr(self, 'odometry_pub_mirte') and self.odometry_pub_mirte:
+            self.odometry_pub_mirte.destroy_node()
+        if hasattr(self, 'odometry_pub_world') and self.odometry_pub_world:
+            self.odometry_pub_world.destroy_node()
+        if hasattr(self, 'pointcloud_pub_mirte') and self.pointcloud_pub_mirte:
+            self.pointcloud_pub_mirte.destroy_node()
+        if hasattr(self, 'pointcloud_pub_world') and self.pointcloud_pub_world:
+            self.pointcloud_pub_world.destroy_node()
+        if hasattr(self, 'movement_pub') and self.movement_pub:
             self.movement_pub.destroy_node()
         rclpy.shutdown()
     
@@ -85,7 +91,7 @@ class KU_Mirte:
         self.drive_thread.start()
 
     def _stop_drive_thread(self):
-        if self.drive_thread:
+        if hasattr(self, 'drive_thread') and self.drive_thread:
             self.movement_pub.shutdown()
             self.drive_thread.join()
             self.drive_thread_executor.shutdown()
@@ -137,12 +143,25 @@ class KU_Mirte:
         """
         return self.lidar_sub.angle_section(start_angle, end_angle)
 
-    def set_odometry(self, position, rotation):
+    def set_odometry(self, reference, position, rotation):
         """Sets the odometry position and rotation."""
-        self.odometry_pub.set_position(position, rotation)
-        rclpy.spin_once(self.odometry_pub)
-    
-    def set_point_cloud(self, points, colors=None):
+        if reference == 'mirte':
+            self.odometry_pub_mirte.set_position(position, rotation)
+            rclpy.spin_once(self.odometry_pub_mirte)
+        elif reference == 'world':
+            self.odometry_pub_world.set_position(position, rotation)
+            rclpy.spin_once(self.odometry_pub_world)
+        else:
+            raise ValueError("Reference must be 'mirte' or 'world'.")
+        
+    def set_pointcloud(self, reference, points, colors=None):
         """Sets the point cloud data."""
-        self.point_cloud_pub.points(points, colors)
-        rclpy.spin_once(self.point_cloud_pub)
+        if reference == 'mirte':
+            self.pointcloud_pub_mirte.set_points(points, colors)
+            rclpy.spin_once(self.pointcloud_pub_mirte)
+        elif reference == 'world':
+            self.pointcloud_pub_world.set_points(points, colors)
+            rclpy.spin_once(self.pointcloud_pub_world)
+        else:
+            raise ValueError("Reference must be 'mirte' or 'world'.")
+    
