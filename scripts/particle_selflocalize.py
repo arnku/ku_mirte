@@ -80,7 +80,7 @@ class ParticleFilter:
         self.particles.positions = np.random.uniform(low=[area[0], area[1]], high=[area[2], area[3]], size=(num_particles, 2))
         self.particles.angles = np.random.uniform(low=0, high=2 * np.pi, size=num_particles)
 
-    def position_probabilities(self, measured_dists: list, landmarks: np.ndarray, sigma: float = 17.0) -> np.ndarray:
+    def position_probabilities(self, measured_dists: list, landmarks: np.ndarray, sigma: float = 1) -> np.ndarray:
         """
         Input:
         - measured_dists: list of measured distances to landmarks [d1, d2, ...]
@@ -89,6 +89,8 @@ class ParticleFilter:
         Output:
         - probs: 2D array of probabilities for each particle and landmark [[p1_l1, p1_l2, ...], [p2_l1, p2_l2, ...], ...]
         """
+        measured_dists = np.array(measured_dists, dtype=np.float64)
+
         # Expand dimensions to calculate distances from each particle to each landmark
         # Calculate the squared differences along each coordinate (shape: [n_particles, n_landmarks, 2])
         diff = (self.particles.positions[:, np.newaxis, :] - landmarks[np.newaxis, :, :])
@@ -97,9 +99,12 @@ class ParticleFilter:
         # Calculate the probabilities (shape: [n_particles, n_landmarks])
         probs = norm.pdf(measured_dists, dists, sigma)
 
+        # Replace probabilities for non-measured distances (NaN) with 1
+        probs[:, np.isnan(measured_dists)] = 1
+
         return probs
 
-    def angle_probabilities(self, measured_angles: dict, landmarks: np.ndarray, sigma: float = 0.4) -> np.ndarray:
+    def angle_probabilities(self, measured_angles: dict, landmarks: np.ndarray, sigma: float = 0.5) -> np.ndarray:
         """
         Input:
         - measured_angles: list of measured angles to landmarks [a1, a2, ...]
@@ -108,6 +113,10 @@ class ParticleFilter:
         Output:
         - probs: 2D array of probabilities for each particle and landmark [[p1_l1, p1_l2, ...], [p2_l1, p2_l2, ...], ...]
         """
+        measured_angles = np.array(measured_angles, dtype=np.float64)
+
+        print(f"measured_angles: {measured_angles}")
+
         # Calculate the unit vector to each landmark from each particle
         # Shape of diff: [n_particles, n_landmarks, 2]
         diff = (landmarks[np.newaxis, :, :] - self.particles.positions[:, np.newaxis, :])
@@ -126,25 +135,27 @@ class ParticleFilter:
         # Calculate probabilities for each particle and landmark based on angles
         probs = norm.pdf(measured_angles, angles, sigma)
 
+        # Replace probabilities for non-measured angles (NaN) with 1
+        probs[:, np.isnan(measured_angles)] = 1
+
         return probs
     
     def particle_weights(self, measured_dists:list, measured_angles:list, landmarks:list) -> None:
         position_probs = self.position_probabilities(measured_dists, landmarks)
-        angle_probs = self.angle_probabilities(measured_angles, landmarks)
+        #angle_probs = self.angle_probabilities(measured_angles, landmarks)
         
-        pos_angle_probs = np.prod([position_probs, angle_probs], axis=0)
-        combined_probs = np.prod(pos_angle_probs, axis=1)
+        #pos_angle_probs = np.prod([position_probs, angle_probs], axis=0)
+        combined_probs = np.prod(position_probs, axis=1)
 
         # Normalize the combined probabilities
-        combined_probs /= np.sum(combined_probs)
+        #combined_probs /= np.sum(combined_probs)
 
         self.particles.weights = combined_probs
         
     def resample_particles(self) -> None:
-        new_particle_indecies = np.random.choice(self.num_particles, self.num_particles, p=self.particles.weights)
+        normalized_weights = self.particles.weights / np.sum(self.particles.weights)
+        new_particle_indecies = np.random.choice(self.num_particles, self.num_particles, p=normalized_weights)
         self.particles.rearrange(new_particle_indecies)
-        # normalize the weights after resampling
-        self.particles.weights /= np.sum(self.particles.weights)
         
     def estimate_pose(self) -> Particle:
         x_avg, y_avg = np.mean(self.particles.positions, axis=0)
@@ -159,9 +170,12 @@ class ParticleFilter:
     
 
 class SelfLocalizer:
-    def __init__(self, num_particles: int, landmarks: list, bounds: tuple):
-        self.landmarks = landmarks
+    def __init__(self, num_particles: int, landmarks: list, landmark_ids: list, bounds: tuple):
+        self.landmarks = np.array(landmarks)
+        self.landmark_id_index = {landmark_id: i for i, landmark_id in enumerate(landmark_ids)}
+
         self.num_particles = num_particles
+        self.bounds = bounds
         self.particle_filter = ParticleFilter(num_particles, area=bounds)
 
     def update_drive(self, dist: float) -> None:
@@ -174,19 +188,28 @@ class SelfLocalizer:
         # Move each particle using vectorized dx, dy
         self.particle_filter.particles.positions += np.column_stack((dx, dy))
 
-        #self.add_uncertainty()
+        self.add_uncertainty()
 
     def update_turn(self, angle: float) -> None:
         self.particle_filter.particles.angles += angle
 
-        #self.add_uncertainty()
+        self.add_uncertainty()
 
-    def update_image(self, distances: list, angles: list, iterations=3) -> None:
+    def update_image(self, ids:list, distances: list, angles: list, iterations=1) -> None:
         for _ in range(iterations):
-            self.particle_filter.particle_weights(distances, angles, self.landmarks)
-            self.particle_filter.resample_particles()
+            distance_list = [None] * len(self.landmarks)
+            angle_list = [None] * len(self.landmarks)
+            for distance, angle, landmark_id in zip(distances, angles, ids):
+                if landmark_id in self.landmark_id_index:
+                    distance_list[self.landmark_id_index[landmark_id]] = distance
+                    angle_list[self.landmark_id_index[landmark_id]] = angle
+                else:
+                    print(f"Landmark ID {landmark_id} not found in landmark index.")
+            
+            self.particle_filter.particle_weights(distance_list, angle_list, self.landmarks)
+            #self.particle_filter.resample_particles()
 
-    def add_uncertainty(self, sigma_x=1, sigma_y=1, sigma_theta=0.1):
+    def add_uncertainty(self, sigma_x=0.02, sigma_y=0.02, sigma_theta=0.1):
         # Create uncertainty arrays
         x_uncertainty = np.random.normal(0, sigma_x, self.num_particles)
         y_uncertainty = np.random.normal(0, sigma_y, self.num_particles)
@@ -195,7 +218,20 @@ class SelfLocalizer:
         # Add uncertainty to each particle
         self.particle_filter.particles.positions += np.column_stack((x_uncertainty, y_uncertainty))
         self.particle_filter.particles.angles += theta_uncertainty
+    
+    def random_positions(self, num_particles: int) -> None:
+        """
+        Randomly move some particles within the bounds of the area.
+        """
+        # Generate random positions within the bounds
+        random_positions = np.random.uniform(low=[self.bounds[0], self.bounds[1]], high=[self.bounds[2], self.bounds[3]], size=(num_particles, 2))
 
+        # get the indices of the particles with lowest weights
+        lowest_weight_indices = np.argsort(self.particle_filter.particles.weights)[:num_particles]
+        # Update the positions of the particles with lowest weights
+        for random_pos, index in zip(random_positions, lowest_weight_indices):
+            self.particle_filter.particles.particles[index].x = random_pos[0]
+            self.particle_filter.particles.particles[index].y = random_pos[1]
 
 def main():
     particle = Particle()
