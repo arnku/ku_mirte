@@ -69,9 +69,8 @@ class Particles:
     def __iter__(self):
         return iter(self.particles)
 
-
 class ParticleFilter:
-    def __init__(self, num_particles: int = 100, area: tuple = (0, 0, 10, 10)):
+    def __init__(self, area: tuple, num_particles: int = 100):
         self.num_particles = num_particles
         self.particles = Particles(num_particles)
         
@@ -139,18 +138,122 @@ class ParticleFilter:
         probs[:, np.isnan(measured_angles)] = 1
 
         return probs
+
+    def lidar_probabilities(self, measured_lidar: np.ndarray, landmarks: np.ndarray, lidar_diff_theshold: float = 5, lidar_max_dist: float = 20, object_size: tuple = (0.2,0.3), sigma_angle: float = 0.5, sigma_dist: float = 0.5) -> np.ndarray:
+        """
+        
+        """
+        measured_lidar = np.array(measured_lidar, dtype=np.float64)
+        measured_lidar[measured_lidar == np.inf] = lidar_max_dist
+        # Filtering out robot components
+        measured_lidar[29:36] = lidar_max_dist # TODO: This can be done smarter
+        measured_lidar[324:331] = lidar_max_dist
+        # calculating lidar differentials
+        lidar_diffs = np.diff(measured_lidar, axis=0)
+        # filtering out small differences
+        #print(f"lidar_diffs: {lidar_diffs}")   
+        lidar_diffs[abs(lidar_diffs) < lidar_diff_theshold] = 0
+        #print(f"lidar_filtered_diffs: {lidar_diffs}")   
+
+
+        #def value_to_color(value):
+        #    # Map value to grayscale (black to white)
+        #    gray = int(255 - (value/lidar_max_dist) * 255)
+        #    return f"\033[48;2;{0};{gray};{0}m  \033[0m"
+        #for dist in measured_lidar:
+        #    print(value_to_color(dist), end="")
+        #print("\n")
+
+
+        # Segment the lidar data into objects
+        segment_indices = np.where(lidar_diffs)[0] 
+        #print(f"segment_indices: {segment_indices}")
+        #print(lidar_diffs[segment_indices])
+        segments = np.split(measured_lidar, segment_indices + 1)
+
+        # Find the minimum distance in each segment
+        min_segment_dists = np.array([np.min(segment) for segment in segments])
+        #print(f"min_segment_dists: {min_segment_dists}")
+
+        # Find the angle width of each segment
+        index_widths = np.diff(segment_indices, prepend=0, append=len(measured_lidar))
+        # since there are 360 angles, the index width is the same as the angle width
+        #print(f"index_widths: {index_widths}")
+        #print(f"index_widths: {np.sum(index_widths)}")
+        angle_widths = np.deg2rad(index_widths)
+        #print(f"angle_widths: {angle_widths}")
+
+        # Calculate the actual width of each object
+        object_widths = min_segment_dists * np.tan(angle_widths / 2) # TODO: WRONG SIZE CALULATIONS
+        
+        np.set_printoptions(suppress=True)  # Suppress scientific notation
+        #print(f"object_widths: {object_widths}")
+
+        # get the index of objects that are around the size of a box
+        box_indices = np.where((object_widths > object_size[0]) & (object_widths < object_size[1]))[0]
+        #print(f"box_indices: {box_indices}")
+        if len(box_indices) == 0:
+            return np.ones(self.num_particles)
+
+        # Get the index of the min distances of the objects
+        object_location = np.where(np.isin(measured_lidar, min_segment_dists[box_indices]))[0]
+        # Here again the indicies can be directly used as angles
+        object_angles = np.deg2rad(object_location)
+        print(f"object_angles: {object_angles}")
+        object_dists = min_segment_dists[box_indices]
+        #print(f"object_dists: {object_dists}")
+
+        # Find the particle angles to each object
+        # Calculate the unit vector to each landmark from each particle
+        # Shape of diff: [n_particles, n_landmarks, 2]
+        diff = (landmarks[np.newaxis, :, :] - self.particles.positions[:, np.newaxis, :])
+        dists = np.linalg.norm(diff, axis=2)  # Shape: [n_particles, n_landmarks]
+        e_ls = (diff / dists[..., np.newaxis])  # Unit vectors to landmarks, shape: [n_particles, n_landmarks, 2]
+
+        # Calculate the orientation vectors and their orthogonals for each particle
+        e_thetas = np.stack([np.cos(self.particles.angles), np.sin(self.particles.angles)], axis=1)  # Shape: [n_particles, 2]
+        e_ortho_thetas = np.stack([-e_thetas[:, 1], e_thetas[:, 0]], axis=1)  # Orthogonal vectors, shape: [n_particles, 2]
+
+        # Calculate theoretical angles using the dot product
+        dot_products = np.einsum("ijk,ik->ij", e_ls, e_ortho_thetas)  # Dot products, shape: [n_particles, n_landmarks]
+        angle_signs = np.sign(dot_products)  # Shape: [n_particles, n_landmarks]
+        angles = angle_signs * np.arccos(np.einsum("ijk,ik->ij", e_ls, e_thetas))  # Shape: [n_particles, n_landmarks]
+
+        # Filter the angles to only include those that are close to the object angles
+        filtered_angles = np.array([
+            row[np.argsort(np.min(np.abs(row[:, None] - object_angles[None, :]), axis=1))[:len(object_angles)]]
+            for row in angles
+        ])
+        #print(f"filtered_angles: {filtered_angles}")
+        # Filter the distances 
+        filtered_distances = np.array([
+            row[np.argsort(np.min(np.abs(row[:, None] - object_dists[None, :]), axis=1))[:len(object_dists)]]
+            for row in dists
+        ])
+        #print(f"filtered_dists: {filtered_distances}")
+
+        # Calculate probabilities for each particle and object based on angles
+        angle_probs = (norm.pdf(object_angles, filtered_angles, sigma_angle)) # TODO: Angle are acting strange
+        dist_probs = (norm.pdf(object_dists, filtered_distances, sigma_dist))
+
+        # Combine the probabilities
+        #combined_probs = angle_probs * dist_probs
+        combined_probs = angle_probs
+        combined_probs = np.prod(combined_probs, axis=1)
+        
+        return combined_probs
+        
+            
     
-    def particle_weights(self, measured_dists:list, measured_angles:list, landmarks:list) -> None:
-        position_probs = self.position_probabilities(measured_dists, landmarks)
+    def particle_weights(self, measured_dists:list, measured_angles:list, measured_lidar:list, landmarks:list) -> None:
+        #position_probs = self.position_probabilities(measured_dists, landmarks)
         #angle_probs = self.angle_probabilities(measured_angles, landmarks)
         
         #pos_angle_probs = np.prod([position_probs, angle_probs], axis=0)
-        combined_probs = np.prod(position_probs, axis=1)
-
-        # Normalize the combined probabilities
-        #combined_probs /= np.sum(combined_probs)
-
-        self.particles.weights = combined_probs
+        #combined_probs = np.prod(pos_angle_probs, axis=1)
+        lidar_probs = self.lidar_probabilities(measured_lidar, landmarks)
+        
+        self.particles.weights = lidar_probs
         
     def resample_particles(self) -> None:
         normalized_weights = self.particles.weights / np.sum(self.particles.weights)
@@ -176,7 +279,7 @@ class SelfLocalizer:
 
         self.num_particles = num_particles
         self.bounds = bounds
-        self.particle_filter = ParticleFilter(num_particles, area=bounds)
+        self.particle_filter = ParticleFilter(bounds, num_particles=num_particles)
 
     def update_drive(self, dist: float) -> None:
         # Get angles of all particles as a vector
@@ -195,18 +298,19 @@ class SelfLocalizer:
 
         self.add_uncertainty()
 
-    def update_image(self, ids:list, distances: list, angles: list, iterations=1) -> None:
+    def update_image(self, ids:list, distances: list, angles: list, lidars: list, iterations=1) -> None:
         for _ in range(iterations):
             distance_list = [None] * len(self.landmarks)
             angle_list = [None] * len(self.landmarks)
-            for distance, angle, landmark_id in zip(distances, angles, ids):
-                if landmark_id in self.landmark_id_index:
-                    distance_list[self.landmark_id_index[landmark_id]] = distance
-                    angle_list[self.landmark_id_index[landmark_id]] = angle
-                else:
-                    print(f"Landmark ID {landmark_id} not found in landmark index.")
+            if ids is not None:
+                for distance, angle, landmark_id in zip(distances, angles, ids):
+                    if landmark_id in self.landmark_id_index:
+                        distance_list[self.landmark_id_index[landmark_id]] = distance
+                        angle_list[self.landmark_id_index[landmark_id]] = angle
+                    else:
+                        print(f"Landmark ID {landmark_id} not found in landmark index.")
             
-            self.particle_filter.particle_weights(distance_list, angle_list, self.landmarks)
+            self.particle_filter.particle_weights(distance_list, angle_list, lidars, self.landmarks)
             #self.particle_filter.resample_particles()
 
     def add_uncertainty(self, sigma_x=0.02, sigma_y=0.02, sigma_theta=0.1):
@@ -234,60 +338,24 @@ class SelfLocalizer:
             self.particle_filter.particles.particles[index].y = random_pos[1]
 
 def main():
-    particle = Particle()
-    particle.x = 1
-    particle.y = 2
-    particle.theta = 3 * np.pi
+    # Example usage
+    area = (0, 0, 10, 10)  # Define the area as (x_min, y_min, x_max, y_max)
+    num_particles = 10
+    landmarks = np.array([[1, 1], [2, 2], [3, 3]])  # Example landmarks
+    landmark_ids = [1, 2, 4]
 
-    assert(particle.x == 1)
-    assert(particle.y == 2)
-    assert(particle.theta == np.pi)
-    del particle
+    localizer = SelfLocalizer(num_particles, landmarks, landmark_ids, area)
 
-    num_particles = 1000
-    particle_filter = ParticleFilter(num_particles=num_particles, area=(0, 0, 10, 10))
-    
-    assert(particle_filter.particles.positions.shape == (num_particles, 2))
-    assert(particle_filter.particles.angles.shape == (num_particles, ))
-    assert(particle_filter.particles.weights.shape == (num_particles, ))
+    # Simulate some movements and updates
+    localizer.update_drive(1.0)
+    localizer.update_turn(np.pi / 4)
+    lidar_data = np.array([np.inf] * 360)
+    lidar_data[100:130] = np.random.uniform(9, 10, 30)  # Simulate some lidar data
+    lidar_data[210:230] = np.random.uniform(14, 15, 20)  # Simulate some lidar data
+    localizer.update_image([1, 4], [1.5, 2.5], [0.5, 0.7], lidar_data)
 
-    particle_filter.particle_weights(
-        measured_dists=[1, 2, 3],
-        measured_angles=[0.1, 0.2, 0.3],
-        landmarks=np.array([[1, 1], [2, 2], [3, 3]])
-    )
-    
-    assert(particle_filter.particles.positions.shape == (num_particles, 2))
-    assert(particle_filter.particles.angles.shape == (num_particles, ))
-    assert(particle_filter.particles.weights.shape == (num_particles, ))
-    assert(not np.all(particle_filter.particles.positions == particle_filter.particles.positions[0]))
-    assert(np.sum(particle_filter.particles.weights) == 1.0)
-
-    particle_filter.resample_particles()
-
-    assert(particle_filter.particles.positions.shape == (num_particles, 2))
-    assert(particle_filter.particles.angles.shape == (num_particles, ))
-    assert(particle_filter.particles.weights.shape == (num_particles, ))
-    assert(not np.all(particle_filter.particles.positions == particle_filter.particles.positions[0]))
-    assert(np.sum(particle_filter.particles.weights) == 1.0)
-
-    particle_filter.resample_particles()
-
-    estimated_pose = particle_filter.estimate_pose()
-    assert(estimated_pose.x >= 0 and estimated_pose.x <= 10)
-    assert(estimated_pose.y >= 0 and estimated_pose.y <= 10)
-    assert(estimated_pose.theta >= 0 and estimated_pose.theta <= 2 * np.pi)
-
-    self_localizer = SelfLocalizer(
-        num_particles=num_particles,
-        landmarks=np.array([[1, 1], [2, 2], [3, 3]]),
-        bounds=(0, 0, 10, 10)
-    )
-    self_localizer.update_drive(1.0)
-    self_localizer.update_turn(np.pi / 4)
-    self_localizer.update_image([1, 2, 3], [0.1, 0.2, 0.3])
-    estimated_pose = self_localizer.particle_filter.estimate_pose()
-
+    estimated_pose = localizer.particle_filter.estimate_pose()
+    print(f"Estimated Pose: {estimated_pose}")
 
 if __name__ == "__main__":
     main()
