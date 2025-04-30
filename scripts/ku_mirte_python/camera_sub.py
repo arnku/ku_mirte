@@ -14,7 +14,7 @@ class CameraSubscriber(Node):
             Image,
             '/camera/image_raw',
             self._listener_callback,
-            10  # Queue size
+            1  # Queue size
         )
         self.subscription  # prevent unused variable warning
         

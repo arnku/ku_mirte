@@ -13,7 +13,7 @@ class PointCloudPublisher(Node):
     def __init__(self, topic_name, reference_frame, target_frame = 'odom', rate=0.1):
         super().__init__('pointcloud_publisher')
         
-        self.publisher_ = self.create_publisher(PointCloud2, topic_name, 10)
+        self.publisher_ = self.create_publisher(PointCloud2, topic_name, 1)
         self.reference_frame = reference_frame
         self.target_frame = target_frame
         

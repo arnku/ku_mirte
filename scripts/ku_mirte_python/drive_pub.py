@@ -1,6 +1,5 @@
 import time
 import threading
-from concurrent.futures import Future
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
@@ -21,8 +20,6 @@ class MovementPublisher(Node):
 
         self.timer = None
         self.start_drive_time: float | None = None
-
-        self.stop_future = Future()  # Future to signal when to stop
 
     def drive(self, lin_speed: float, ang_speed: float, duration: float, interrupt:bool=True):
         """
@@ -48,7 +45,7 @@ class MovementPublisher(Node):
             if interrupt: # The robot is already driving and want to interrupt
                 self.timer.cancel() # Stop the current drive
         
-        self.timer = self.create_timer(0.01, self._publish_volicity) # Create a timer to publish the velocity every 0.1 seconds
+        self.timer = self.create_timer(0.005, self._publish_volicity) # Create a timer to publish the velocity every 0.1 seconds
     
     def tank_drive(self, left_speed: float, right_speed: float, duration: float):
         """
@@ -76,15 +73,6 @@ class MovementPublisher(Node):
             self.timer.cancel()
             self.timer = None
 
-    def shutdown(self):
-        """
-        Stops the robot, and signals the node to stop spinning if running in a separate thread.
-        Use `drive_thread_executor.spin_until_future_complete` and wait for `stop_future` to complete.
-        """
-        self.stop()
-        # Signal the node to stop spinning
-        self.stop_future.set_result(True)
-
     def _publish_volicity(self):
         twist = Twist()
         twist.linear.x = self.lin_speed
@@ -108,7 +96,7 @@ def main():
     executor.add_node(node)
 
     # Run the executor in a separate thread
-    executor_thread = threading.Thread(target=executor.spin_until_future_complete, args=(node.stop_future,))
+    executor_thread = threading.Thread(target=executor.spin, daemon=True)
     executor_thread.start()
 
     node.drive(-0.5, 0.0, 1.0)

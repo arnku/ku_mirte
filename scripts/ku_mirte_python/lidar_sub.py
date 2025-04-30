@@ -9,7 +9,7 @@ class LidarSubscriber(Node):
             LaserScan,
             '/scan',
             self.lidar_callback,
-            10  # QoS profile depth
+            1  # QoS profile depth
         )
         self.subscription  # prevent unused variable warning
 

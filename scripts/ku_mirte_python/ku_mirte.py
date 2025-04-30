@@ -23,22 +23,23 @@ class KU_Mirte:
         self.pointcloud_pub_world = PointCloudPublisher('pointcloud_world', 'odom')
         self.movement_pub = MovementPublisher()
 
-        self.drive_thread = None
-        self.drive_thread_executor = None
-        self._start_drive_thread()
+        self.executor_thread = None
+        self.executor = None
+        self._start_executor_thread()
 
         rclpy.spin_once(self.robot_pos_sub)
-        rclpy.spin_once(self.camera_sub)
         rclpy.spin_once(self.lidar_sub)
 
         self.k_matrix = self.camera_sub.k_matrix # Camera intrinsic matrix
         self.d_matrix = self.camera_sub.d_matrix # Camera distortion
         self.p_matrix = self.camera_sub.p_matrix # Camera projection matrix
 
+        print("KU Mirte initialized.")
+
     def __del__(self):
         """Ensure that nodes are properly destroyed when the object is deleted."""
         
-        self._stop_drive_thread()
+        self._stop_executor_thread()
 
         if hasattr(self, 'robot_pos_sub') and self.robot_pos_sub:
             self.robot_pos_sub.destroy_node()
@@ -56,6 +57,7 @@ class KU_Mirte:
             self.pointcloud_pub_world.destroy_node()
         if hasattr(self, 'movement_pub') and self.movement_pub:
             self.movement_pub.destroy_node()
+        
         rclpy.shutdown()
     
     def get_position(self):
@@ -84,19 +86,26 @@ class KU_Mirte:
             print("Rotation not initialized...")
         return rotation
     
-    def _start_drive_thread(self):
-        self.drive_thread_executor = MultiThreadedExecutor()
-        self.drive_thread_executor.add_node(self.movement_pub)
-        self.drive_thread = threading.Thread(target=self.drive_thread_executor.spin_until_future_complete, args=(self.movement_pub.stop_future,))
-        self.drive_thread.start()
+    def _start_executor_thread(self):
+        print("Starting executor thread...")
+        self.executor = MultiThreadedExecutor()
 
-    def _stop_drive_thread(self):
-        if hasattr(self, 'drive_thread') and self.drive_thread:
-            self.movement_pub.shutdown()
-            self.drive_thread.join()
-            self.drive_thread_executor.shutdown()
-            self.drive_thread_executor = None
-            self.drive_thread = None
+        self.executor.add_node(self.camera_sub)
+        self.executor.add_node(self.movement_pub)
+        self.executor.add_node(self.lidar_sub)
+        self.executor.add_node(self.pointcloud_pub_mirte)
+        self.executor.add_node(self.pointcloud_pub_world)
+
+        self.executor_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self.executor_thread.start()
+        print("Executor thread started.")
+    
+    def _stop_executor_thread(self):
+        if hasattr(self, 'executor_thread') and self.executor_thread:
+            self.executor.shutdown()
+            self.executor_thread.join()
+            self.executor = None
+            self.executor_thread = None
 
     def drive(self, lin_speed, ang_speed, duration, blocking=True):
         """
@@ -142,12 +151,12 @@ class KU_Mirte:
 
     def get_image(self):
         """Returns the most recent image from the camera."""
-        rclpy.spin_once(self.camera_sub)
+        #rclpy.spin_once(self.camera_sub)
         return self.camera_sub.image()
     
     def get_lidar_ranges(self):
         """Returns the most recent lidar ranges."""
-        rclpy.spin_once(self.lidar_sub)
+        #rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.ranges()
     
     def get_lidar_section(self, start_angle, end_angle):
@@ -160,7 +169,7 @@ class KU_Mirte:
             start_angle (float): The start angle of the section in radians.
             end_angle (float): The end angle of the section in radians.
         """
-        rclpy.spin_once(self.lidar_sub)
+        #rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.angle_section(start_angle, end_angle)
 
     def set_odometry(self, reference, position, rotation):
@@ -178,10 +187,10 @@ class KU_Mirte:
         """Sets the point cloud data."""
         if reference == 'mirte':
             self.pointcloud_pub_mirte.set_points(points, colors)
-            rclpy.spin_once(self.pointcloud_pub_mirte)
+            #rclpy.spin_once(self.pointcloud_pub_mirte)
         elif reference == 'world':
             self.pointcloud_pub_world.set_points(points, colors)
-            rclpy.spin_once(self.pointcloud_pub_world)
+            #rclpy.spin_once(self.pointcloud_pub_world)
         else:
             raise ValueError("Reference must be 'mirte' or 'world'.")
     
