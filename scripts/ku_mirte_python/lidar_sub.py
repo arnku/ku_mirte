@@ -1,6 +1,8 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
+import numpy as np
+import time
 
 class LidarSubscriber(Node):
     def __init__(self):
@@ -9,7 +11,7 @@ class LidarSubscriber(Node):
             LaserScan,
             '/scan',
             self.lidar_callback,
-            1  # QoS profile depth
+            2  
         )
         self.subscription  # prevent unused variable warning
 
@@ -21,7 +23,10 @@ class LidarSubscriber(Node):
         self.lidar_message = msg
 
     def ranges(self):
-        return self.lidar_message.ranges
+        while self.lidar_message is None:
+            self.get_logger().info("Waiting for lidar message...")
+            time.sleep(0.1)
+        return np.array(self.lidar_message.ranges)
 
     def angle_section(self, start_angle: float, end_angle: float | None = None):
         """

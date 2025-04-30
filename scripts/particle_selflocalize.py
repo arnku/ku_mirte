@@ -118,7 +118,7 @@ class ParticleFilter:
 
         return probs
 
-    def angle_probabilities(self, measured_angles: dict, landmark_angles: np.ndarray, sigma: float = 0.5) -> np.ndarray:
+    def angle_probabilities(self, measured_angles: dict, landmark_angles: np.ndarray, sigma: float = 0.2) -> np.ndarray:
         """
         Input:
         - measured_angles: list of measured angles to landmarks [a1, a2, ...]
@@ -193,13 +193,13 @@ class ParticleFilter:
 
         position_probs = self.position_probabilities(measured_dists, dists)
         angle_probs = self.angle_probabilities(measured_angles, angles)
-        lidar_probs = self.lidar_probabilities(measured_lidar, dists, angles) * 0.1
+        lidar_probs = self.lidar_probabilities(measured_lidar, dists, angles)
         
         aruco_angle_dist = np.prod([position_probs, angle_probs], axis=0) # Combine the probabilities for each particle and landmark
         aruco_angle_dist = np.prod(aruco_angle_dist, axis=1)
         combined_probs = np.prod([aruco_angle_dist, lidar_probs], axis=0) # Combine the probabilities with the lidar probabilities
 
-        self.particles.weights = aruco_angle_dist
+        self.particles.weights = combined_probs
         
     def resample_particles(self) -> None:
         normalized_weights = self.particles.weights / np.sum(self.particles.weights)
@@ -256,7 +256,6 @@ class SelfLocalizer:
                     else:
                         print(f"Landmark ID {landmark_id} not found in landmark index.")
             
-            print(f"Distance list: {distance_list}")
             self.particle_filter.particle_weights(distance_list, angle_list, lidars, self.landmarks)
             #self.particle_filter.resample_particles()
 

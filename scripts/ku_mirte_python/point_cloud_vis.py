@@ -10,7 +10,7 @@ from geometry_msgs.msg import Pose, Point, Quaternion
 
 
 class PointCloudPublisher(Node):
-    def __init__(self, topic_name, reference_frame, target_frame = 'odom', rate=0.1):
+    def __init__(self, topic_name, reference_frame, target_frame = 'odom', rate=0.2):
         super().__init__('pointcloud_publisher')
         
         self.publisher_ = self.create_publisher(PointCloud2, topic_name, 1)
@@ -29,7 +29,7 @@ class PointCloudPublisher(Node):
 
     def publish_pointcloud(self):
         if self.current_points.size == 0:
-            self.get_logger().warn("No points set! Call node.set_points(points, colors) to set data.")
+            #self.get_logger().warn("No points set! Call node.set_points(points, colors) to set data.")
             return
 
         cloud_msg = PointCloud2()
@@ -85,7 +85,8 @@ class PointCloudPublisher(Node):
         try:
             # Wait for the transform to become available
             while not self.tf_buffer.can_transform(self.target_frame, self.reference_frame, rclpy.time.Time().to_msg()):
-                rclpy.spin_once(self, timeout_sec=0.1)
+                #rclpy.spin_once(self, timeout_sec=0.1)
+                time.sleep(0.1)
 
             # Get the latest transform from the reference frame to the target frame
             transform = self.tf_buffer.lookup_transform(self.target_frame, self.reference_frame, rclpy.time.Time().to_msg())

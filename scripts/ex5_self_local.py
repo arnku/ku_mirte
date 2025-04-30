@@ -16,22 +16,17 @@ mirte = KU_Mirte()
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 parameters = cv2.aruco.DetectorParameters_create()
 
-selflocalizer = SelfLocalizer(500, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-2, -2, 6, 6))
+selflocalizer = SelfLocalizer(2000, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-4, -4, 8, 8))
 
 while cv2.waitKey(4) == -1: # Wait for a key pressed event
 
     # get reading from the camera
 
     image = mirte.get_image()
-    lidar = np.array(mirte.get_lidar_ranges())
+    lidar = mirte.get_lidar_ranges()
 
     # find aruco markers
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
-    print("ids: ", ids)
-
-    if ids is None:
-        print("No markers found")
-        continue
 
     image = cv2.aruco.drawDetectedMarkers(image, corners, ids)
     cv2.imshow("Detected Markers", image)
@@ -42,7 +37,7 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     if ids is not None:
         ids = ids.flatten()
         corners = [corners[i] for i in range(len(corners)) if ids[i] not in ids[:i]]
-        ids = np.unique(ids)
+        ids = np.array(list(dict.fromkeys(ids))) # Remove duplicates from ids while preserving order
         rvecs, tvecs, rejectedImgPoints = cv2.aruco.estimatePoseSingleMarkers(corners, aruco_size, mirte.k_matrix, mirte.d_matrix)
         tvecs = [[tvec[0][2], -tvec[0][0], -tvec[0][1]] for tvec in tvecs]
         
@@ -58,7 +53,7 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
             distances.append(distance)
             angles.append(angle)
 
-        print(f"Distances: {distances} and Angles: {angles}")
+        #print(f"Distances: {distances} and Angles: {angles}")
 
     
     selflocalizer.add_uncertainty()
@@ -71,7 +66,6 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     colors = []
     for p in selflocalizer.particle_filter.particles.positions:
         points.append([p[0], p[1], 0])
-    print(selflocalizer.particle_filter.particles.weights * 255 * selflocalizer.particle_filter.particles.num_particles)
     for w in selflocalizer.particle_filter.particles.weights:
         colors.append([0,0,255,min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
     

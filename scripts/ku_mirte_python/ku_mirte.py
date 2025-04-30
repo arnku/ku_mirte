@@ -28,7 +28,7 @@ class KU_Mirte:
         self._start_executor_thread()
 
         rclpy.spin_once(self.robot_pos_sub)
-        rclpy.spin_once(self.lidar_sub)
+        #rclpy.spin_once(self.lidar_sub)
 
         self.k_matrix = self.camera_sub.k_matrix # Camera intrinsic matrix
         self.d_matrix = self.camera_sub.d_matrix # Camera distortion

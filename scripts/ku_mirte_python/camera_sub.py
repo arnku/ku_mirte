@@ -45,6 +45,10 @@ class CameraSubscriber(Node):
         # Destroy the subscription after receiving the data
         self.destroy_subscription(self.camera_info_subscription)
 
+        # Spin until the first image is received
+        while self.latest_image is None:
+            rclpy.spin_once(self)
+
 
     def _listener_callback(self, msg):
         """Callback function to process incoming camera images."""
