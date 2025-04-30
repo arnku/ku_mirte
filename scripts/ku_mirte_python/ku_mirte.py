@@ -112,10 +112,29 @@ class KU_Mirte:
             duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
             blocking (bool): If `True`, the function will wait for the drive to finish before continuing. If `False`, the function will return immediately.
         """
-        self.movement_pub.drive(lin_speed, ang_speed, duration)
+        self.movement_pub.drive(float(lin_speed), float(ang_speed), duration)
         
         while blocking and self.movement_pub.timer is not None: # Blocking
             time.sleep(0.01) # Robot can stop during this sleep, it is only to prevent the function from returning before the drive is finished.
+    
+    def tank_drive(self, left_speed, right_speed, duration, blocking=True):
+        """
+        Drive the robot with a given left and right speed for a given duration.
+        If duration is `0.0`, the robot will drive forever.
+        Blocking will wait for the drive to finish before continuing. 
+        Disabling blocking will allow for the robot to drive while the script continues.
+        The Robot can be stopped at any time by calling `stop()`.
+
+        Parameters:
+            left_speed (float): The left wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
+            right_speed (float): The right wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
+            duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
+            blocking (bool): If `True`, the function will wait for the drive to finish before continuing. If `False`, the function will return immediately.
+        """
+        self.movement_pub.tank_drive(left_speed, right_speed, duration)
+        
+        while blocking and self.movement_pub.timer is not None:
+            time.sleep(0.01)
     
     def stop(self):
         """Stops the robot."""
@@ -141,6 +160,7 @@ class KU_Mirte:
             start_angle (float): The start angle of the section in radians.
             end_angle (float): The end angle of the section in radians.
         """
+        rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.angle_section(start_angle, end_angle)
 
     def set_odometry(self, reference, position, rotation):

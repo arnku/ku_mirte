@@ -16,7 +16,7 @@ mirte = KU_Mirte()
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 parameters = cv2.aruco.DetectorParameters_create()
 
-selflocalizer = SelfLocalizer(1000, [[0,0], [2,2]], [0,1], bounds=(-3, -3, 3, 3))
+selflocalizer = SelfLocalizer(500, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-2, -2, 6, 6))
 
 while cv2.waitKey(4) == -1: # Wait for a key pressed event
 
@@ -27,6 +27,11 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
 
     # find aruco markers
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
+    print("ids: ", ids)
+
+    if ids is None:
+        print("No markers found")
+        continue
 
     image = cv2.aruco.drawDetectedMarkers(image, corners, ids)
     cv2.imshow("Detected Markers", image)
@@ -53,10 +58,10 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
             distances.append(distance)
             angles.append(angle)
 
-        #print(f"Distances: {distances} and Angles: {angles}")
+        print(f"Distances: {distances} and Angles: {angles}")
 
     
-    #selflocalizer.add_uncertainty()
+    selflocalizer.add_uncertainty()
     selflocalizer.update_image(ids,distances, angles, lidar)
     #selflocalizer.random_positions(50)
     # plot the particles with pointcloud
@@ -66,6 +71,7 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     colors = []
     for p in selflocalizer.particle_filter.particles.positions:
         points.append([p[0], p[1], 0])
+    print(selflocalizer.particle_filter.particles.weights * 255 * selflocalizer.particle_filter.particles.num_particles)
     for w in selflocalizer.particle_filter.particles.weights:
         colors.append([0,0,255,min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
     

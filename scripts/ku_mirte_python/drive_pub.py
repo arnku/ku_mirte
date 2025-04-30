@@ -48,7 +48,19 @@ class MovementPublisher(Node):
             if interrupt: # The robot is already driving and want to interrupt
                 self.timer.cancel() # Stop the current drive
         
-        self.timer = self.create_timer(0.1, self._publish_volicity)
+        self.timer = self.create_timer(0.01, self._publish_volicity) # Create a timer to publish the velocity every 0.1 seconds
+    
+    def tank_drive(self, left_speed: float, right_speed: float, duration: float):
+        """
+        Drive the robot with a given left and right speed for a given duration.
+        If duration is `None`, the robot will drive forever.
+
+        Parameters:
+            left_speed (float): The left wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
+            right_speed (float): The right wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
+            duration (float): The duration (seconds) of the drive. If `None`, the robot will drive forever.
+        """
+        self.drive((left_speed + right_speed) / 2, (right_speed - left_speed) / 2, duration)
 
     def stop(self):
         """
@@ -79,9 +91,10 @@ class MovementPublisher(Node):
         twist.angular.z = self.ang_speed
         self.publisher_.publish(twist)
 
-        if self.duration == 0.0:
+        if self.duration is None:
             return # The robot should drive forever
-
+        if self.duration == 0.0:
+            self.stop()
         if time.time() - self.start_drive_time > self.duration:
             self.stop()
             

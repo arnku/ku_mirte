@@ -1,2 +1,5 @@
 .vscode
 *.pyc
+/build
+/install
+/log

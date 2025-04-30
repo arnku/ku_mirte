@@ -142,8 +142,9 @@ def main():
     world_file_path = os.path.join(os.path.dirname(__file__), 'worlds', world_name)
     aruco_dict = {
         0: {'position': [0, 0, box_size / 2], 'size': [box_size, box_size, box_size]},
-        1: {'position': [2, 2, box_size / 2], 'size': [box_size, box_size, box_size]},
-        # Add more ArUco codes and positions as needed
+        1: {'position': [0, 4, box_size / 2], 'size': [box_size, box_size, box_size]},
+        2: {'position': [4, 0, box_size / 2], 'size': [box_size, box_size, box_size]},
+        3: {'position': [4, 4, box_size / 2], 'size': [box_size, box_size, box_size]},
     }
 
     tree, root = parse_world_file(world_file_path)
