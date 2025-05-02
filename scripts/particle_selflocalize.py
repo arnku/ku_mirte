@@ -79,6 +79,8 @@ class ParticleFilter:
         self.particles.positions = np.random.uniform(low=[area[0], area[1]], high=[area[2], area[3]], size=(num_particles, 2))
         self.particles.angles = np.random.uniform(low=0, high=2 * np.pi, size=num_particles)
 
+        self.weights_used = "all"
+
 
     def _precompute_landmarks(self, landmarks: np.ndarray) -> tuple:
         """
@@ -191,15 +193,28 @@ class ParticleFilter:
     def particle_weights(self, measured_dists:list, measured_angles:list, measured_lidar:list, landmarks:list) -> None:
         dists, angles = self._precompute_landmarks(landmarks) # Precompute distances and angles to landmarks for each particle
 
-        position_probs = self.position_probabilities(measured_dists, dists)
-        angle_probs = self.angle_probabilities(measured_angles, angles)
-        lidar_probs = self.lidar_probabilities(measured_lidar, dists, angles)
-        
-        aruco_angle_dist = np.prod([position_probs, angle_probs], axis=0) # Combine the probabilities for each particle and landmark
-        aruco_angle_dist = np.prod(aruco_angle_dist, axis=1)
-        combined_probs = np.prod([aruco_angle_dist, lidar_probs], axis=0) # Combine the probabilities with the lidar probabilities
+        if self.weights_used == "all":
+            position_probs = self.position_probabilities(measured_dists, dists)
+            angle_probs = self.angle_probabilities(measured_angles, angles)
+            lidar_probs = self.lidar_probabilities(measured_lidar, dists, angles)
+            
+            aruco_angle_dist = np.prod([position_probs, angle_probs], axis=0) # Combine the probabilities for each particle and landmark
+            aruco_angle_dist = np.prod(aruco_angle_dist, axis=1)
+            combined_probs = np.prod([aruco_angle_dist, lidar_probs], axis=0) # Combine the probabilities with the lidar probabilities
 
-        self.particles.weights = combined_probs
+            self.particles.weights = combined_probs
+            return
+        if self.weights_used == "lidar": 
+            lidar_probs = self.lidar_probabilities(measured_lidar, dists, angles)
+            self.particles.weights = lidar_probs
+            return
+        if self.weights_used == "aruco":
+            position_probs = self.position_probabilities(measured_dists, dists)
+            angle_probs = self.angle_probabilities(measured_angles, angles)
+            aruco_angle_dist = np.prod([position_probs, angle_probs], axis=0)
+            aruco_angle_dist = np.prod(aruco_angle_dist, axis=1)
+            self.particles.weights = aruco_angle_dist
+            return
         
     def resample_particles(self) -> None:
         normalized_weights = self.particles.weights / np.sum(self.particles.weights)
@@ -244,20 +259,20 @@ class SelfLocalizer:
 
         self.add_uncertainty()
 
-    def update_image(self, ids:list, distances: list, angles: list, lidars: list, iterations=1) -> None:
-        for _ in range(iterations):
-            distance_list = [None] * len(self.landmarks)
-            angle_list = [None] * len(self.landmarks)
-            if ids is not None:
-                for distance, angle, landmark_id in zip(distances, angles, ids):
-                    if landmark_id in self.landmark_id_index:
-                        distance_list[self.landmark_id_index[landmark_id]] = distance
-                        angle_list[self.landmark_id_index[landmark_id]] = angle
-                    else:
-                        print(f"Landmark ID {landmark_id} not found in landmark index.")
+    def update_image(self, ids:list, distances: list, angles: list, lidars: list) -> None:
+        distance_list = [None] * len(self.landmarks)
+        angle_list = [None] * len(self.landmarks)
+        if ids is not None:
+            for distance, angle, landmark_id in zip(distances, angles, ids):
+                if landmark_id in self.landmark_id_index:
+                    distance_list[self.landmark_id_index[landmark_id]] = distance
+                    angle_list[self.landmark_id_index[landmark_id]] = angle
+                else:
+                    #print(f"Landmark ID {landmark_id} not found in landmark index.")
+                    continue
             
-            self.particle_filter.particle_weights(distance_list, angle_list, lidars, self.landmarks)
-            #self.particle_filter.resample_particles()
+        self.particle_filter.particle_weights(distance_list, angle_list, lidars, self.landmarks)
+        #self.particle_filter.resample_particles()
 
     def add_uncertainty(self, sigma_x=0.02, sigma_y=0.02, sigma_theta=0.1):
         # Create uncertainty arrays
