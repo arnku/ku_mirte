@@ -17,6 +17,14 @@ class Particle:
     def theta(self, value):
         self._theta = np.mod(value, 2.0 * np.pi)  # Ensure theta is within [0, 2π)
     
+    @property
+    def position(self):
+        return np.array([self.x, self.y])
+    
+    @position.setter
+    def position(self, value):
+        self.x, self.y = value
+    
     def __repr__(self):
         return f"Particle(x={self.x:.2f}, y={self.y:.2f}, theta={self.theta:.2f}, weight={self.weight})"
 

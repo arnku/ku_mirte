@@ -145,11 +145,11 @@ def main():
         1: {'position': [0, 4, box_size / 2], 'size': [box_size, box_size, box_size]},
         2: {'position': [4, 0, box_size / 2], 'size': [box_size, box_size, box_size]},
         3: {'position': [4, 4, box_size / 2], 'size': [box_size, box_size, box_size]},
-        6: {'position': [2, 2, box_size / 2, 0, 0, 0.5], 'size': [box_size, box_size, box_size]},
-        7: {'position': [0.5, 3, box_size / 2, 0, 0, 1.4], 'size': [box_size, box_size, box_size]},
-        8: {'position': [2.8, 3.2, box_size / 2, 0, 0, 3], 'size': [box_size, box_size, box_size]}, 
-        9: {'position': [3.8, 2.5, box_size / 2, 0, 0, 4], 'size': [box_size, box_size, box_size]},
-        10: {'position': [2.2, 0.5, box_size / 2, 0, 0, 0.2], 'size': [box_size, box_size, box_size]},
+        #6: {'position': [2, 2, box_size / 2, 0, 0, 0.5], 'size': [box_size, box_size, box_size]},
+        #7: {'position': [0.5, 3, box_size / 2, 0, 0, 1.4], 'size': [box_size, box_size, box_size]},
+        #8: {'position': [2.8, 3.2, box_size / 2, 0, 0, 3], 'size': [box_size, box_size, box_size]}, 
+        #9: {'position': [3.8, 2.5, box_size / 2, 0, 0, 4], 'size': [box_size, box_size, box_size]},
+        #10: {'position': [2.2, 0.5, box_size / 2, 0, 0, 0.2], 'size': [box_size, box_size, box_size]},
     }
 
     tree, root = parse_world_file(world_file_path)

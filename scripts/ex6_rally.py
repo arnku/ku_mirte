@@ -12,8 +12,8 @@ from ku_mirte import KU_Mirte
 
 from particle_selflocalize import SelfLocalizer
 
-CANVAS_HEIGHT = 500
-CANVAS_WIDTH = 500
+CANVAS_HEIGHT = 1500
+CANVAS_WIDTH = 1500
 PATH_FOUND = False
 
 aruco_size = 0.25 # m
@@ -23,7 +23,7 @@ mirte = KU_Mirte()
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 parameters = cv2.aruco.DetectorParameters_create()
 
-selflocalizer = SelfLocalizer(2000, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-4, -4, 8, 8))
+selflocalizer = SelfLocalizer(200, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-4, -4, 8, 8))
 selflocalizer.particle_filter.weights_used = "aruco"
 
 
@@ -342,7 +342,7 @@ def do_rrt(marker_positions, start_pos, goal_pos):
 
 
 
-def lidar_positions(measured_lidar: np.ndarray, lidar_diff_theshold: float = 5, lidar_max_dist: float = 20, object_size: tuple = (0.2,0.3)) -> np.ndarray:
+def lidar_positions(measured_lidar: np.ndarray, lidar_diff_theshold: float = 5, lidar_max_dist: float = 20, object_size: tuple = (0.17,0.3)) -> np.ndarray:
     """
     
     """
@@ -430,7 +430,7 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     selflocalizer.add_uncertainty()
     selflocalizer.update_image(ids,distances, angles, lidar)
     selflocalizer.particle_filter.resample_particles()
-    selflocalizer.random_positions(5)
+    selflocalizer.random_positions(1)
 
     # Draw the particles
     points = []
@@ -439,18 +439,64 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
         points.append([p[0], p[1], 0])
     for w in selflocalizer.particle_filter.particles.weights:
         colors.append([0,0,255,min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
+    
     estimate = selflocalizer.particle_filter.estimate_pose()
     points.append([estimate.x, estimate.y, 0])
     colors.append([0,255,255,255])
     mirte.set_pointcloud('world', points, colors)
 
+    marker_list = []
+    for i in range(len(lidar_dists)):
+        angle = lidar_angles[i]
+        distance = lidar_dists[i]
+        marker_x = distance * np.cos(angle) * 100
+        marker_y = distance * np.sin(angle) * 100
+
+        canvas_x = int(-marker_x + CANVAS_WIDTH // 2)
+        canvas_y = int(marker_y + CANVAS_HEIGHT // 2)
+
+        radius = int((1.41 * box_size * 100) // 2)
+
+        canvas.create_oval(circle_cord(canvas_x, canvas_y, radius), fill="#FFFF00", tag=f"marker_{i}")
+
+        marker_list.append([canvas_x, canvas_y])
+
+    # North direction from the robot
+    print(f"Estimated position: {estimate.x * 100}, {estimate.y * 100}")
+    print(f"Estimated direction (degrees): {np.rad2deg(estimate.theta)}")
+    robot_angle = estimate.theta
+    canvas.create_line(
+        CANVAS_WIDTH // 2,
+        CANVAS_HEIGHT // 2,
+        CANVAS_WIDTH // 2 + 50 * np.cos(robot_angle),
+        CANVAS_HEIGHT // 2 + 50 * np.sin(robot_angle),
+        fill="#000000",
+        width=5,
+    )    
+
+    goal_position = [400, 400]
+    goal_position_delta = np.array(goal_position) - np.array(estimate.position) * 100
+    goal_position_angle = robot_angle - np.arctan2(goal_position_delta[1], goal_position_delta[0])
+
+    goal_canvas_position_x = np.cos(goal_position_angle) * np.linalg.norm(goal_position_delta)
+    goal_canvas_position_y = np.sin(goal_position_angle) * np.linalg.norm(goal_position_delta)
+    canvas_goal_x = int(goal_canvas_position_x + CANVAS_WIDTH // 2)
+    canvas_goal_y = int(goal_canvas_position_y + CANVAS_HEIGHT // 2)
+    
+    canvas.create_oval(circle_cord(canvas_goal_x, canvas_goal_y, radius), fill="#00FF00", tag="goal")
+
+    # Robot position
+    canvas.create_oval(circle_cord(CANVAS_WIDTH // 2, CANVAS_HEIGHT // 2, radius), fill="#AAAAAA", tag=f"robot")
+
+
+    #final_path = do_rrt(np.array(marker_list), [CANVAS_WIDTH // 2, CANVAS_HEIGHT // 2], [canvas_goal_x,canvas_goal_y])
+
+    canvas.pack()
     window.update()
+    canvas.delete("all")
 
-    if PATH_FOUND:
-        PATH_FOUND = False
-        input("Press Enter to take a picture...")
-    
-    
 
+
+canvas.pack()
 cv2.destroyAllWindows() # Close the OpenCV windows
 del mirte # Clean up the ROS node
