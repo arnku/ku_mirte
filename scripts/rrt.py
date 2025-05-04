@@ -75,6 +75,8 @@ class GridOccupancyMap:
         origins: list of circle centers
         radii: list of radii
         """
+        self.grid = np.zeros((self.n_grids[0], self.n_grids[1]), dtype=np.uint8) # Reset grid
+        
         for i in range(self.n_grids[0]):
             for j in range(self.n_grids[1]):
                 centroid = np.array([
@@ -103,15 +105,16 @@ class RRT:
     """
     Rapidly-exploring Random Tree (RRT) planner.
     """
-    def __init__(self, start, goal, robot_model, occ_map, expand_dis, path_resolution, max_iter=500):
-        self.start = self.Node(start)
-        self.end = self.Node(goal)
+    def __init__(self, robot_model, occ_map, expand_dis, path_resolution, max_iter=200):
         self.robot = robot_model
         self.map = occ_map
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.max_iter = max_iter
-        self.node_list = [self.start]
+        
+        self.start = None
+        self.end = None
+        self.node_list = None
     
     class Node:
         """Node in the RRT graph."""
@@ -186,11 +189,16 @@ class RRT:
             node = node.parent
         return path[::-1]
     
-    def do_rrt(self):
+    def do_rrt(self, start_pos, goal_pos):
         """
         Perform RRT* path planning.
         Returns the path if found, else None.
         """
+
+        self.start = self.Node(start_pos)
+        self.end = self.Node(goal_pos)
+        self.node_list = [self.start]
+
         for _ in range(self.max_iter):
             # Try to reach the goal
             end_node = self.Node(self.end.pos)
@@ -263,8 +271,8 @@ if __name__ == "__main__":
     occ_map.populate(origins=marker_positions, radii=[marker_radius] * len(marker_positions))
     occ_map.canvas_draw(canvas)
 
-    rrt = RRT(start_pos, goal_pos, robot, occ_map, expand_dis=3 * path_res, path_resolution=path_res, max_iter=100)
-    path = rrt.do_rrt()
+    rrt = RRT(robot, occ_map, expand_dis=3 * path_res, path_resolution=path_res, max_iter=100)
+    path = rrt.do_rrt(start_pos, goal_pos)
     rrt.canvas_draw(path, canvas)
 
     # Run RRT
