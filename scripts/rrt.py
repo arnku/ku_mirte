@@ -8,8 +8,8 @@ class PointMassModel:
     """
     def __init__(self, ctrl_range):
         """
-Initialize the model with control range.
-Initialize the model with control range.
+        Initialize the model with control range.
+        Initialize the model with control range.
         ctrl_range: [min, max] velocity command.
         """
         self.ctrl_range = ctrl_range
@@ -43,11 +43,11 @@ class GridOccupancyMap:
     """
     2D grid occupancy map for collision checking.
     """
-    def __init__(self, low, high, res=0.05):
+    def __init__(self, low, high, res):
         """
         low: lower bound of map (tuple)
         high: upper bound of map (tuple)
-        res: grid resolution
+        res: resolution of the map
         """
         self.map_area = [low, high]
         self.map_size = np.array([high[0] - low[0], high[1] - low[1]])
@@ -103,6 +103,16 @@ class RRT:
     """
     Rapidly-exploring Random Tree (RRT) planner.
     """
+    def __init__(self, start, goal, robot_model, occ_map, expand_dis, path_resolution, max_iter=500):
+        self.start = self.Node(start)
+        self.end = self.Node(goal)
+        self.robot = robot_model
+        self.map = occ_map
+        self.expand_dis = expand_dis
+        self.path_resolution = path_resolution
+        self.max_iter = max_iter
+        self.node_list = [self.start]
+    
     class Node:
         """Node in the RRT graph."""
         def __init__(self, pos):
@@ -113,29 +123,12 @@ class RRT:
         def calc_distance_to(self, other):
             return np.linalg.norm(self.pos - np.array(other.pos))
 
-    def __init__(self, start, goal, robot_model, occ_map, canvas, expand_dis=0.2, path_resolution=0.05, goal_sample_rate=5, max_iter=500):
-        self.start = self.Node(start)
-        self.end = self.Node(goal)
-        self.robot = robot_model
-        self.map = occ_map
-        self.canvas = canvas
-        self.expand_dis = expand_dis
-        self.path_resolution = path_resolution
-        self.goal_sample_rate = goal_sample_rate
-        self.max_iter = max_iter
-        
-        self.min_rand = occ_map.map_area[0]
-        self.max_rand = occ_map.map_area[1]
-        self.node_list = [self.start]
 
-    def get_random_node(self, goal_sample_rate):
+    def get_random_node(self):
         """
-        Sample a random node, with some probability of returning the goal.
+        Sample a random node
         """
-        if np.random.randint(0, 100) > self.goal_sample_rate:
-            rand = np.random.uniform(self.min_rand, self.max_rand)
-            return self.Node(rand)
-        return self.Node(self.end.pos)
+        return self.Node(np.random.uniform(self.map.map_area[0], self.map.map_area[1]))
 
     def get_nearest_node(self, node):
         """
@@ -148,8 +141,7 @@ class RRT:
         Check that all points in a node's path are collision-free.
         """
         if node is None:
-            print("Node is None")
-            return False
+            raise ValueError("Node is None")
         return all(not self.map.in_collision(p) for p in node.path)
 
     def is_goal_reached(self, node):
@@ -182,26 +174,6 @@ class RRT:
         new_node.parent = from_node
         return new_node
     
-    def planning(self):
-        """
-        Perform RRT path planning.
-        Returns the path if found, else None.
-        """
-        for _ in range(self.max_iter):
-            rnd_node = self.get_random_node(self.goal_sample_rate) # random location
-            nearest_node = self.get_nearest_node(rnd_node) # nearest node to random location
-            new_node = self.steer(nearest_node, rnd_node, self.expand_dis) # Line from nearest node towards random location
-
-            if self.check_collision_free(new_node):
-                self.node_list.append(new_node)
-            else:
-                self.draw_node(new_node.pos, color="red")
-
-            if self.is_goal_reached(new_node):
-                return self.generate_final_course(len(self.node_list) - 1)
-        return None
-
-
     def generate_final_course(self, goal_index):
         """
         Backtrack from goal to start to build the path.
@@ -213,109 +185,90 @@ class RRT:
             path.append(node.pos)
             node = node.parent
         return path[::-1]
-
-
-    def draw_graph(self):
+    
+    def do_rrt(self):
         """
-        Draw the current RRT graph on the canvas.
+        Perform RRT* path planning.
+        Returns the path if found, else None.
         """
+        for _ in range(self.max_iter):
+            # Try to reach the goal
+            end_node = self.Node(self.end.pos)
+            nearest_end_node = self.get_nearest_node(end_node) # nearest node to random location
+            new_node = self.steer(nearest_end_node, end_node, extend_length=self.expand_dis) # Line from nearest node towards random location
+            
+            if not self.check_collision_free(new_node):    
+                # Sample a random node
+                rnd_node = self.get_random_node() # random location
+                nearest_node = self.get_nearest_node(rnd_node) # nearest node to random location
+                new_node = self.steer(nearest_node, rnd_node, self.expand_dis) # Line from nearest node towards random location
+
+            if self.check_collision_free(new_node):
+                self.node_list.append(new_node)
+
+            if self.is_goal_reached(new_node):
+                return self.generate_final_course(len(self.node_list) - 1)
+        return None
+
+    def canvas_draw(self, path, canvas, point_size=5, line_width=2):
+        """
+
+        """
+        # Draw start and goal positions
+        canvas.create_oval((self.start.pos[0] - point_size, self.start.pos[1] - point_size, self.start.pos[0] + point_size), self.start.pos[1] + point_size, fill="green")
+        canvas.create_oval((self.end.pos[0] - point_size, self.end.pos[1] - point_size, self.end.pos[0] + point_size), self.end.pos[1] + point_size, fill="blue")
+        
+        # Draw the tree
         for node in self.node_list:
             if node.parent:
-                path = np.array(node.path)
-                for i in range(1, len(path)):
-                    self.canvas.create_line(
-                        path[i - 1][1], path[i - 1][0], path[i][1], path[i][0], fill="black"
+                tree = np.array([node.parent.pos] + node.path)
+                for i in range(1, len(tree)):
+                    canvas.create_line(
+                        tree[i - 1][0], tree[i - 1][1], tree[i][0], tree[i][1], 
+                        width=line_width,
+                        fill="black"
                     )
         print(f"Drawing {len(self.node_list)} nodes")
 
-    def draw_node(self, pos, color="red"):
-        """
-        Draw a single node as a colored oval on the canvas.
-        """
-        self.canvas.create_oval(
-            pos[1] - 5, pos[0] - 5, pos[1] + 5, pos[0] + 5, fill=color
-        )
-        self.canvas.pack()
+        # Draw the path
+        if path is not None:
+            for i in range(len(path) - 1):
+                x1, y1 = path[i]
+                x2, y2 = path[i + 1]
+                canvas.create_line(x1, y1, x2, y2, width=line_width, fill="green")
 
-# --- Utility functions ---
-
-def circle_cord(x, y, r):
-    """Return bounding box coordinates for a circle."""
-    return x - r, y - r, x + r, y + r
-
-def do_rrt(marker_positions, start_pos, goal_pos):
-    """
-    Run RRT planner and visualize the result.
-    marker_positions: numpy array of obstacle centers
-    start_pos: start position (x, y)
-    goal_pos: goal position (x, y)
-    Returns: path if found, else None
-    """
-    path_res = 10
-
-    occ_map = GridOccupancyMap(low=(0, 0), high=(CANVAS_WIDTH, CANVAS_HEIGHT), res=path_res)
-    print("Occupancy map created")
-
-    # Flip x and y for marker positions
-    #rev_marker_positions[:, 0], rev_marker_positions[:, 1] = marker_positions[:, 1], marker_positions[:, 0]
-
-    occ_map.populate(origins=marker_positions, radii=[50] * len(marker_positions))
-    occ_map.canvas_draw(canvas)
-    print("Map populated with obstacles")
-
-    robot = PointMassModel(ctrl_range=[-path_res, path_res])
-    rrt = RRT(
-        start=start_pos,
-        goal=goal_pos,
-        robot_model=robot,
-        occ_map=occ_map,
-        canvas=canvas,
-        expand_dis=80,
-        path_resolution=path_res,
-        max_iter=100,
-    )
-
-    path = rrt.planning()
-    canvas.create_oval(circle_cord(250, 300, 10), fill="#587D71")
-    rrt.draw_graph()
-
-    if path is None:
-        print("Path not found")
-        return None
-    else:
-        for i in range(len(path) - 1):
-            x1, y1 = path[i]
-            x2, y2 = path[i + 1]
-            canvas.create_line(y1, x1, y2, x2, width=5, fill="#754668")
-        return path
 
 if __name__ == "__main__":
     # Example usage
     CANVAS_WIDTH = 800
     CANVAS_HEIGHT = 600
+    # Example marker positions (obstacles)
+    marker_positions = np.array([[100, 200], [200, 200], [400, 300]])
+    marker_radius = 50
+    
+    # Start and goal positions
+    start_pos = [300, 100]
+    goal_pos = [500, 500]
+
+    path_res = 10 # Resolution of the grid
 
     # Create a Tkinter canvas for visualization
     import tkinter as tk
     window = tk.Tk()
     canvas = tk.Canvas(window, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
     
-    # Example marker positions (obstacles)
-    marker_positions = np.array([[100, 200], [300, 400], [500, 100]])
-    
-    # Start and goal positions
-    start_pos = [250, 300]
-    goal_pos = [700, 500]
-    
-    # Draw the occupancy map
-    occ_map = GridOccupancyMap(low=(0, 0), high=(CANVAS_WIDTH, CANVAS_HEIGHT), res=10)
-    occ_map.populate(origins=marker_positions, radii=[50] * len(marker_positions))
+    robot = PointMassModel(ctrl_range=[-path_res, path_res])
+
+    occ_map = GridOccupancyMap(low=(0, 0), high=(CANVAS_WIDTH, CANVAS_HEIGHT), res=path_res)
+    occ_map.populate(origins=marker_positions, radii=[marker_radius] * len(marker_positions))
     occ_map.canvas_draw(canvas)
-    canvas.pack()
-    input("Press Enter to continue...")
-    canvas.delete("all")
+
+    rrt = RRT(start_pos, goal_pos, robot, occ_map, expand_dis=3 * path_res, path_resolution=path_res, max_iter=100)
+    path = rrt.do_rrt()
+    rrt.canvas_draw(path, canvas)
 
     # Run RRT
-    do_rrt(marker_positions, start_pos, goal_pos)
+    canvas.pack()
     input("Press Enter to exit...")
     
     #window.mainloop()
