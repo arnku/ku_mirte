@@ -7,16 +7,19 @@ import time
 from robot_pos_sub import PositionSubscriber
 from camera_sub import CameraSubscriber
 from lidar_sub import LidarSubscriber
+from sonar_sub import SonarSubscriber
 from vector_vis import OdometryPublisher
 from point_cloud_vis import PointCloudPublisher
 from drive_pub import MovementPublisher
 
 class KU_Mirte:
     def __init__(self):
+        print("Initiating components")
         rclpy.init()
         self.robot_pos_sub = PositionSubscriber()
         self.camera_sub = CameraSubscriber()
         self.lidar_sub = LidarSubscriber()
+        self.sonar_sub = SonarSubscriber()
         self.odometry_pub_mirte = OdometryPublisher('odometry_mirte', 'base_link')
         self.odometry_pub_world = OdometryPublisher('odometry_world', 'odom')
         self.pointcloud_pub_mirte = PointCloudPublisher('pointcloud_mirte', 'base_link')
@@ -27,7 +30,7 @@ class KU_Mirte:
         self.executor = None
         self._start_executor_thread()
 
-        rclpy.spin_once(self.robot_pos_sub)
+        rclpy.spin_once(self.robot_pos_sub, timeout_sec=2.0)
         #rclpy.spin_once(self.lidar_sub)
 
         self.k_matrix = self.camera_sub.k_matrix # Camera intrinsic matrix
@@ -47,6 +50,8 @@ class KU_Mirte:
             self.camera_sub.destroy_node()
         if hasattr(self, 'lidar_sub') and self.lidar_sub:
             self.lidar_sub.destroy_node()
+        if hasattr(self, 'sonar_sub') and self.sonar_sub:
+            self.sonar_sub.destroy_node()
         if hasattr(self, 'odometry_pub_mirte') and self.odometry_pub_mirte:
             self.odometry_pub_mirte.destroy_node()
         if hasattr(self, 'odometry_pub_world') and self.odometry_pub_world:
@@ -62,12 +67,12 @@ class KU_Mirte:
     
     def get_position(self):
         """Returns the most recent position of the robot."""
-        rclpy.spin_once(self.robot_pos_sub)
+        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
         return self.robot_pos_sub.get_position()
     
     def get_rotation(self):
         """Returns the most recent rotation of the robot."""
-        rclpy.spin_once(self.robot_pos_sub)
+        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
         return self.robot_pos_sub.get_rotation()
 
     @property
@@ -93,6 +98,7 @@ class KU_Mirte:
         self.executor.add_node(self.camera_sub)
         self.executor.add_node(self.movement_pub)
         self.executor.add_node(self.lidar_sub)
+        self.executor.add_node(self.sonar_sub)
         self.executor.add_node(self.pointcloud_pub_mirte)
         self.executor.add_node(self.pointcloud_pub_world)
 
@@ -123,7 +129,8 @@ class KU_Mirte:
         """
         self.movement_pub.drive(float(lin_speed), float(ang_speed), duration)
         
-        while blocking and self.movement_pub.timer is not None: # Blocking
+        time.sleep(0.1) # Allow time for the thread to realize it is driving
+        while blocking and self.movement_pub.driving: # Blocking
             time.sleep(0.01) # Robot can stop during this sleep, it is only to prevent the function from returning before the drive is finished.
     
     def tank_drive(self, left_speed, right_speed, duration, blocking=True):
@@ -140,9 +147,13 @@ class KU_Mirte:
             duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
             blocking (bool): If `True`, the function will wait for the drive to finish before continuing. If `False`, the function will return immediately.
         """
+
+        #TODO: THIS ABVIOUSLY IS WRONG???? USE MORE DIRECT APPROACH
+
         self.movement_pub.tank_drive(left_speed, right_speed, duration)
         
-        while blocking and self.movement_pub.timer is not None:
+        time.sleep(0.1) # Allow time for the thread to realize it is driving
+        while blocking and self.movement_pub.driving: # Blocking
             time.sleep(0.01)
     
     def stop(self):
@@ -171,6 +182,11 @@ class KU_Mirte:
         """
         #rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.angle_section(start_angle, end_angle)
+
+    def get_sonar_ranges(self):
+        """Returns the most recent sonar ranges."""
+        #rclpy.spin_once(self.sonar_sub)
+        return self.sonar_sub.get_distances()
 
     def set_odometry(self, reference, position, rotation):
         """Sets the odometry position and rotation."""

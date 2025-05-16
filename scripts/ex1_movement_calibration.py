@@ -11,6 +11,6 @@ for _ in range(4):
     print("Moving forward")
     mirte.drive(0.5, 0.0, 1.0) # 0.5 m forward
     print("Turning right")
-    mirte.drive(0.0, 1.0, pi/2) # 90 degrees to the left
+    mirte.drive(0.0, 2.0, pi/2) # 90 degrees to the left
 
 del mirte

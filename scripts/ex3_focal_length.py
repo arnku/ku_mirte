@@ -9,10 +9,9 @@ import numpy as np
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'ku_mirte_python')))
 from ku_mirte import KU_Mirte
 
-
+show_picture = False
 aruco_size = 0.25 # m
 box_size = 0.4 # m
-
 
 mirte = KU_Mirte()
 
@@ -36,7 +35,6 @@ def calc_box_size(corner):
     return math.sqrt(avg)
 
 def calc_box_x_position(corner):
-    # TODO: maths can be simplified
     x_center = imageSize[0] / 2
     x_marker = (corner[0][0][0] + corner[0][2][0]) / 2
     x_diff = x_center - x_marker
@@ -56,7 +54,8 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
     image = cv2.aruco.drawDetectedMarkers(image, corners, ids)
     
-    cv2.imshow("Detected Markers", image)
+    if show_picture:
+        cv2.imshow("Detected Markers", image)
 
     time_e = time.time()
     if frame > fps: # print once pr second
@@ -64,17 +63,16 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
         fps = 1 / (time_e - time_s)
         print(f"{fps=}")
         print(f"{ids=}")
-        if mirte.position is None:
-            continue
-        print(f"robot position: ({mirte.position.x}, {mirte.position.y})")
         for corner in corners:
             print(f"{calc_box_size(corner)=}")
             print(f"{calc_box_x_position(corner)=}")
+            if mirte.position is None:
+                continue
+            print(f"robot position: ({mirte.position.x}, {mirte.position.y})")
             print(f"distance: {distance((mirte.position.x, mirte.position.y), (box_size/2, 0))} m") # TODO: Add the angle to the calculation. Right now it only works along the x-axis
             print(f"focal length: {calc_box_size(corner) * (distance((mirte.position.x, mirte.position.y), (box_size/2, 0)) / aruco_size)}")
-
-
     frame += 1
 
-cv2.destroyAllWindows() # Close the OpenCV windows
+if show_picture:
+    cv2.destroyAllWindows() # Close the OpenCV windows
 del mirte # Clean up the ROS node

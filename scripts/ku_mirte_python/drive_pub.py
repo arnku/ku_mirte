@@ -12,19 +12,21 @@ class MovementPublisher(Node):
     """
     def __init__(self):
         super().__init__('movement_publisher')
-        self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)
+        self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
 
         self.lin_speed: float = 0.0
         self.ang_speed: float = 0.0
-        self.duration: float = 0.0
+        self.duration: float | None = 0.0
 
-        self.timer = None
-        self.start_drive_time: float | None = None
+        self.start_drive_time: float = time.time()
+        self.driving : bool = False
+
+        self.timer = self.create_timer(0.05, self._publish_volicity) 
 
     def drive(self, lin_speed: float, ang_speed: float, duration: float, interrupt:bool=True):
         """
         Drive the robot with a given speed and direction for a given duration.
-        If duration is `0.0`, the robot will drive forever.
+        If duration is None, the robot will drive forever.
         If interrupt is `True`, the current drive will be interrupted. 
         If it however is `False`, the current drive will not be interrupted.
 
@@ -34,20 +36,16 @@ class MovementPublisher(Node):
             duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
             interrupt (bool): If `True`, the current drive will be interrupted. If `False`, the current drive will not be interrupted.
         """
+        if self.driving:
+            if not interrupt: # The robot is already driving and dont want to interrupt
+                return # Did not change the drive of the robot
+        
         self.lin_speed = lin_speed
         self.ang_speed = ang_speed
         self.duration = duration
-        self.start_drive_time = time.time()
-
-        if self.timer is not None:
-            if not interrupt: # The robot is already driving and dont want to interrupt
-                return # Did not change the drive of the robot
-            if interrupt: # The robot is already driving and want to interrupt
-                self.timer.cancel() # Stop the current drive
-        
-        self.timer = self.create_timer(0.005, self._publish_volicity) # Create a timer to publish the velocity every 0.1 seconds
+        self.start_drive_time = time.time()        
     
-    def tank_drive(self, left_speed: float, right_speed: float, duration: float):
+    def tank_drive(self, left_speed: float, right_speed: float, duration: float, interrupt:bool=True):
         """
         Drive the robot with a given left and right speed for a given duration.
         If duration is `None`, the robot will drive forever.
@@ -57,41 +55,45 @@ class MovementPublisher(Node):
             right_speed (float): The right wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
             duration (float): The duration (seconds) of the drive. If `None`, the robot will drive forever.
         """
-        self.drive((left_speed + right_speed) / 2, (right_speed - left_speed) / 2, duration)
+        self.drive((left_speed + right_speed) / 2, (right_speed - left_speed) / 2, duration, interrupt) 
 
     def stop(self):
         """
         Stops the robot.
         """
         # Stop the robot by publishing zero velocities
+        self.driving = False
+        self.duration = 0.0
         twist = Twist()
         twist.linear.x = 0.0
         twist.angular.z = 0.0
         self.publisher_.publish(twist)
 
-        if self.timer is not None:
-            self.timer.cancel()
-            self.timer = None
-
     def _publish_volicity(self):
+        """
+        Always running. 
+        """
+        if self.duration is not None:
+            if self.duration == 0.0:
+                self.stop()
+                return
+            if time.time() - self.start_drive_time > self.duration:
+                self.stop()
+                return
+
+        self.driving = True
         twist = Twist()
         twist.linear.x = self.lin_speed
         twist.angular.z = self.ang_speed
         self.publisher_.publish(twist)
-
-        if self.duration is None:
-            return # The robot should drive forever
-        if self.duration == 0.0:
-            self.stop()
-        if time.time() - self.start_drive_time > self.duration:
-            self.stop()
-            
         
 
 def main():
+    print("Initializing")
     rclpy.init()
     node = MovementPublisher()
     
+    print("Starting thread")
     executor = MultiThreadedExecutor()
     executor.add_node(node)
 
@@ -107,12 +109,8 @@ def main():
 
     time.sleep(1)
 
+    print("Stoppig")
     node.stop()
-
-    time.sleep(2)
-
-    node.shutdown()
-
     executor_thread.join()  # Wait for the thread to finish before proceeding
     
     # Ensure proper shutdown
