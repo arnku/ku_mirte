@@ -3,7 +3,6 @@ import sys
 import os
 import numpy as np
 import time
-import tkinter as tk
 import math
 
 
@@ -13,30 +12,17 @@ from ku_mirte import KU_Mirte
 from particle_selflocalize import SelfLocalizer
 import rrt
 
-CANVAS_WIDTH = 800
-CANVAS_HEIGHT = 600
-CANVAS_RES = 10 # Resolution of the grid
-window = tk.Tk()
-canvas = tk.Canvas(window, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
+CANVASS = True
 
-aruco_size = 0.25 # m
-box_size = 0.4 # m
+if CANVASS:
+    import tkinter as tk
+    CANVAS_WIDTH = 1200
+    CANVAS_HEIGHT = 1200
+    window = tk.Tk()
+    canvas = tk.Canvas(window, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
 
-mirte = KU_Mirte()
-aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
-parameters = cv2.aruco.DetectorParameters_create()
-
-selflocalizer = SelfLocalizer(200, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-4, -4, 8, 8))
-selflocalizer.particle_filter.weights_used = "aruco"
-
-robot = rrt.PointMassModel(ctrl_range=[-CANVAS_RES, CANVAS_RES])
-occ_map = rrt.GridOccupancyMap(low=(0, 0), high=(CANVAS_WIDTH, CANVAS_HEIGHT), res=CANVAS_RES)
-path_find = rrt.RRT(robot, occ_map, expand_dis=3 * CANVAS_RES, path_resolution=CANVAS_RES)
 
 def lidar_positions(measured_lidar: np.ndarray, lidar_diff_theshold: float = 5, lidar_max_dist: float = 20, object_size: tuple = (0.17,0.3)) -> np.ndarray:
-    """
-    
-    """
     measured_lidar = np.array(measured_lidar, dtype=np.float64)
     measured_lidar[measured_lidar == np.inf] = lidar_max_dist
     
@@ -68,6 +54,21 @@ def lidar_positions(measured_lidar: np.ndarray, lidar_diff_theshold: float = 5, 
 
     return object_dists, object_angles
 
+aruco_size = 0.25 # m
+box_size = 0.4 # m
+path_res = 0.1
+
+mirte = KU_Mirte()
+aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+parameters = cv2.aruco.DetectorParameters_create()
+
+selflocalizer = SelfLocalizer(200, [[0,0], [0,4], [4,0], [4,4]], [0,1,2,3], bounds=(-6, -6, 6, 6))
+selflocalizer.particle_filter.weights_used = "aruco"
+
+robot = rrt.PointMassModel(ctrl_range=[-path_res, path_res])
+occ_map = rrt.GridOccupancyMap(low=(-6, -6), high=(6, 6), res=path_res)
+path_find = rrt.RRT(robot, occ_map, expand_dis=3 * path_res, path_resolution=path_res, max_iter=200)
+
 
 while cv2.waitKey(4) == -1: # Wait for a key pressed event
     # get reading from the camera
@@ -76,7 +77,7 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     # find aruco markers
     corners, ids, rejectedImgPoints = cv2.aruco.detectMarkers(image, aruco_dict, parameters=parameters)
     image = cv2.aruco.drawDetectedMarkers(image, corners, ids)
-    cv2.imshow("Detected Markers", image)
+    #cv2.imshow("Detected Markers", image)
 
     # Aruco marker positions
     distances = []
@@ -135,56 +136,50 @@ while cv2.waitKey(4) == -1: # Wait for a key pressed event
     points.append([estimate.x, estimate.y, 0])
     colors.append([0,255,255,255])
     mirte.set_pointcloud('world', points, colors)
+    print(f"Estimated position: {estimate.x }, {estimate.y }")
+    print(f"Estimated direction (degrees): {np.rad2deg(estimate.theta)}")
 
-    #
     marker_list = []
     for i in range(len(lidar_dists)):
         angle = lidar_angles[i]
         distance = lidar_dists[i]
-        marker_x = distance * np.cos(angle) * 100
-        marker_y = distance * np.sin(angle) * 100
-
-        canvas_x = int(-marker_x + CANVAS_WIDTH // 2)
-        canvas_y = int(marker_y + CANVAS_HEIGHT // 2)
-        radius = int((1.41 * box_size * 100) // 2)
-
-        marker_list.append([canvas_x, canvas_y])
+        marker_x = -distance * np.cos(angle)
+        marker_y = distance * np.sin(angle)
+        marker_list.append([marker_x, marker_y])
     
-    occ_map.populate(marker_list, [radius] * len(marker_list))
-
-    # North direction from the robot
-    print(f"Estimated position: {estimate.x * 100}, {estimate.y * 100}")
-    print(f"Estimated direction (degrees): {np.rad2deg(estimate.theta)}")
-    robot_angle = estimate.theta
-    canvas.create_line(
-        CANVAS_WIDTH // 2,
-        CANVAS_HEIGHT // 2,
-        CANVAS_WIDTH // 2 + 50 * np.cos(robot_angle),
-        CANVAS_HEIGHT // 2 + 50 * np.sin(robot_angle),
-        fill="#000000",
-        width=5,
-    )    
+    print(f"Markers: {marker_list}")
+    occ_map.populate(marker_list, [box_size] * len(marker_list))
+    mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution)
 
     # Goal position
-    goal_position = [400, 400]
-    goal_position_delta = np.array(goal_position) - np.array(estimate.position) * 100
-    goal_position_angle = robot_angle - np.arctan2(goal_position_delta[1], goal_position_delta[0])
+    goal_global_position = [4, 4]
+    goal_position_vector = np.array(goal_global_position) - np.array(estimate.position)
 
-    goal_canvas_position_x = np.cos(goal_position_angle) * np.linalg.norm(goal_position_delta)
-    goal_canvas_position_y = np.sin(goal_position_angle) * np.linalg.norm(goal_position_delta)
-    canvas_goal_x = int(goal_canvas_position_x + CANVAS_WIDTH // 2)
-    canvas_goal_y = int(goal_canvas_position_y + CANVAS_HEIGHT // 2)
+    goal_position_angle = estimate.theta - np.arctan2(goal_position_vector[1], goal_position_vector[0])
+
+    goal_position_x = np.cos(goal_position_angle) * np.linalg.norm(goal_position_vector)
+    goal_position_y = np.sin(goal_position_angle) * np.linalg.norm(goal_position_vector)
     
-    path = rrt.do_rrt([CANVAS_WIDTH // 2, CANVAS_HEIGHT // 2], [canvas_goal_x,canvas_goal_y])
+    print(f"Goal position: {goal_position_x}, {goal_position_y}")   
 
-    occ_map.canvas_draw(canvas)
-    rrt.canvas_draw(path, canvas)
+    edges = []
+    colours = []
+    path = path_find.do_rrt((0,0), (goal_position_x, goal_position_y))
+    print(f"Path: {path}")
+    if path is not None:
+        for i in range(len(path) - 1):
+            edges.append(((path[i][0],-path[i][1]), (path[i + 1][0], -path[i + 1][1])))
+            colours.append((255, 0, 0, 255))
+    mirte.set_tree('mirte', edges, colours)
 
-    canvas.pack()
-    window.update()
-    canvas.delete("all")
+    if CANVASS:
+        canvas.delete("all")
+        occ_map.canvas_draw(canvas)
+        path_find.canvas_draw(path, canvas, low=(-6, -6), high=(6, 6))
+        canvas.pack()
+        window.update()
 
 
 
-cv2.destroyAllWindows() # Close the OpenCV windows
+#cv2.destroyAllWindows() # Close the OpenCV windows
 del mirte # Clean up the ROS node

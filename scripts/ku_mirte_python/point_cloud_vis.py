@@ -6,7 +6,7 @@ import numpy as np
 import time
 import tf2_ros
 import tf2_geometry_msgs
-from geometry_msgs.msg import Pose, Point, Quaternion
+from geometry_msgs.msg import Pose, Point
 
 
 class PointCloudPublisher(Node):

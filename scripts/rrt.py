@@ -65,9 +65,9 @@ class GridOccupancyMap:
             int((pos[1] - self.map_area[0][1]) // self.resolution),
         ]
         for i, ind in enumerate(indices):
-            if ind < 0 or ind >= self.n_grids[i]:
+            if ind < 0 or ind >= self.n_grids[i]: # Out of bounds
                 return True
-        return self.grid[indices[0], indices[1]] == 1
+        return bool(self.grid[indices[0], indices[1]])
 
     def populate(self, origins, radii):
         """
@@ -85,20 +85,20 @@ class GridOccupancyMap:
                 ])
                 for o, r in zip(origins, radii):
                     if np.linalg.norm(centroid - o) <= r:
-                        self.grid[i, j] = 1
+                        self.grid[i, j] = 100
                         break
-    
+
     def canvas_draw(self, canvas):
         """
         Draw the occupancy map on the canvas.
         """
         for i in range(self.n_grids[0]):
             for j in range(self.n_grids[1]):
-                if self.grid[i, j] == 1:
-                    x1 = int(self.map_area[0][0] + self.resolution * (i + 0.5))
-                    y1 = int(self.map_area[0][1] + self.resolution * (j + 0.5))
-                    x2 = int(x1 + self.resolution)
-                    y2 = int(y1 + self.resolution)
+                if self.grid[i, j]:
+                    x1 = int(self.map_area[0][0] + i // self.resolution)
+                    y1 = int(self.map_area[0][1] + j // self.resolution)
+                    x2 = int(self.map_area[0][0] + (i + 1) // self.resolution)
+                    y2 = int(self.map_area[0][1] + (j + 1) // self.resolution)
                     canvas.create_rectangle(x1, y1, x2, y2, fill="black")
 
 class RRT:
@@ -218,65 +218,116 @@ class RRT:
                 return self.generate_final_course(len(self.node_list) - 1)
         return None
 
-    def canvas_draw(self, path, canvas, point_size=5, line_width=2):
-        """
-
-        """
-        # Draw start and goal positions
-        canvas.create_oval((self.start.pos[0] - point_size, self.start.pos[1] - point_size, self.start.pos[0] + point_size), self.start.pos[1] + point_size, fill="green")
-        canvas.create_oval((self.end.pos[0] - point_size, self.end.pos[1] - point_size, self.end.pos[0] + point_size), self.end.pos[1] + point_size, fill="blue")
-        
+    def canvas_draw(self, path, canvas, low, high, point_size=5, line_width=2, scale = 100):
+        canvas.create_oval(
+            (self.start.pos[0] - low[0]) * scale - point_size // 2,
+            (self.start.pos[1] - low[1]) * scale - point_size // 2,
+            (self.start.pos[0] - low[0]) * scale + point_size // 2,
+            (self.start.pos[1] - low[1]) * scale + point_size // 2,
+            fill="blue", outline="blue"
+        )
+        canvas.create_oval(
+            (self.end.pos[0] - low[0]) * scale - point_size // 2,
+            (self.end.pos[1] - low[1]) * scale - point_size // 2,
+            (self.end.pos[0] - low[0]) * scale + point_size // 2,
+            (self.end.pos[1] - low[1]) * scale + point_size // 2,
+            fill="red", outline="red"
+        )
         # Draw the tree
         for node in self.node_list:
             if node.parent:
                 tree = np.array([node.parent.pos] + node.path)
                 for i in range(1, len(tree)):
                     canvas.create_line(
-                        tree[i - 1][0], tree[i - 1][1], tree[i][0], tree[i][1], 
+                        (tree[i - 1][0] - low[0]) * scale,
+                        (tree[i - 1][1] - low[1]) * scale,
+                        (tree[i][0] - low[0]) * scale,
+                        (tree[i][1] - low[1]) * scale,
                         width=line_width,
-                        fill="black"
+                        fill="green"
                     )
-        print(f"Drawing {len(self.node_list)} nodes")
 
         # Draw the path
         if path is not None:
             for i in range(len(path) - 1):
                 x1, y1 = path[i]
                 x2, y2 = path[i + 1]
-                canvas.create_line(x1, y1, x2, y2, width=line_width, fill="green")
+                canvas.create_line(
+                    (x1 - low[0]) * scale,
+                    (y1 - low[1]) * scale,
+                    (x2 - low[0]) * scale,
+                    (y2 - low[1]) * scale,
+                    width=line_width,
+                    fill="red"
+                )
 
 
 if __name__ == "__main__":
-    # Example usage
-    CANVAS_WIDTH = 800
-    CANVAS_HEIGHT = 600
+    CANVAS = False
+
+    if CANVAS:
+        CANVAS_SCALE = 100
+        import tkinter as tk
+        window = tk.Tk()
+    
+
+
     # Example marker positions (obstacles)
-    marker_positions = np.array([[100, 200], [200, 200], [400, 300]])
-    marker_radius = 50
+    marker_positions = np.array([[1, 2], [-1, 2], [0, 3], [2,2]])
+    marker_radius = 0.4
     
     # Start and goal positions
-    start_pos = [300, 100]
-    goal_pos = [500, 500]
+    start_pos = [0, 0]
+    goal_pos = [3, 3]
 
-    path_res = 10 # Resolution of the grid
-
-    # Create a Tkinter canvas for visualization
-    import tkinter as tk
-    window = tk.Tk()
-    canvas = tk.Canvas(window, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
+    path_res = 0.1 # Resolution of the grid
     
+    import sys
+    import os
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'ku_mirte_python')))
+    from ku_mirte import KU_Mirte
+
     robot = PointMassModel(ctrl_range=[-path_res, path_res])
+    mirte = KU_Mirte()
 
-    occ_map = GridOccupancyMap(low=(0, 0), high=(CANVAS_WIDTH, CANVAS_HEIGHT), res=path_res)
+    occ_map = GridOccupancyMap(low=(-4, -4), high=(4, 4), res=path_res)
+
+    if CANVAS:
+        canvas = tk.Canvas(window, width=8 * CANVAS_SCALE, height=8 * CANVAS_SCALE)
+
     occ_map.populate(origins=marker_positions, radii=[marker_radius] * len(marker_positions))
-    occ_map.canvas_draw(canvas)
-
+    
     rrt = RRT(robot, occ_map, expand_dis=3 * path_res, path_resolution=path_res, max_iter=100)
     path = rrt.do_rrt(start_pos, goal_pos)
-    rrt.canvas_draw(path, canvas)
+    
+    edges = []
+    colours = []
+    #for node in rrt.node_list:
+    #    if node.parent:
+    #        tree = np.array([node.parent.pos] + node.path)
+    #        for i in range(1, len(tree)):
+    #            edges.append((tree[i - 1], tree[i]))
+    #            colours.append((0, 255, 0, 255))
 
-    # Run RRT
-    canvas.pack()
+    # Draw the path
+    if path is not None:
+        for i in range(len(path) - 1):
+            edges.append(((path[i][1],path[i][0]), (path[i + 1][1], path[i + 1][0])))
+            colours.append((255, 0, 0, 255))
+    
+    marker_positions = marker_positions.tolist()
+    marker_positions.append(start_pos)
+    marker_positions.append(goal_pos)
+    occ_map.populate(origins=marker_positions, radii=[marker_radius] * len(marker_positions))
+    mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution)
+
+    mirte.set_tree('mirte', edges, colours)
+    
+    if CANVAS:
+        occ_map.canvas_draw(canvas)
+        rrt.canvas_draw(path, canvas, resolution=path_res, low=(-4, -4), high=(4, 4))
+        # Run RRT
+        canvas.pack()
     input("Press Enter to exit...")
     
     #window.mainloop()

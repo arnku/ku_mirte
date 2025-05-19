@@ -11,6 +11,8 @@ from sonar_sub import SonarSubscriber
 from vector_vis import OdometryPublisher
 from point_cloud_vis import PointCloudPublisher
 from drive_pub import MovementPublisher
+from tree_pub import TreePublisher
+from map_pub import OccupancyMapPublisher
 
 class KU_Mirte:
     def __init__(self):
@@ -22,8 +24,11 @@ class KU_Mirte:
         self.sonar_sub = SonarSubscriber()
         self.odometry_pub_mirte = OdometryPublisher('odometry_mirte', 'base_link')
         self.odometry_pub_world = OdometryPublisher('odometry_world', 'odom')
+        self.tree_pub_mirte = TreePublisher('tree_mirte', 'base_link')
+        self.tree_pub_world = TreePublisher('tree_world', 'odom')
         self.pointcloud_pub_mirte = PointCloudPublisher('pointcloud_mirte', 'base_link')
         self.pointcloud_pub_world = PointCloudPublisher('pointcloud_world', 'odom')
+        self.occupancy_pub_mirte = OccupancyMapPublisher('occupancy_grid_mirte', 'base_link')
         self.movement_pub = MovementPublisher()
 
         self.executor_thread = None
@@ -101,6 +106,8 @@ class KU_Mirte:
         self.executor.add_node(self.sonar_sub)
         self.executor.add_node(self.pointcloud_pub_mirte)
         self.executor.add_node(self.pointcloud_pub_world)
+        self.executor.add_node(self.occupancy_pub_mirte)
+        self.executor.add_node(self.tree_pub_mirte)
 
         self.executor_thread = threading.Thread(target=self.executor.spin, daemon=True)
         self.executor_thread.start()
@@ -160,6 +167,11 @@ class KU_Mirte:
         """Stops the robot."""
         self.movement_pub.stop()
 
+    @property
+    def is_driving(self):
+        """Returns True if the robot is driving, False otherwise."""
+        return self.movement_pub.driving
+
     def get_image(self):
         """Returns the most recent image from the camera."""
         #rclpy.spin_once(self.camera_sub)
@@ -198,7 +210,23 @@ class KU_Mirte:
             rclpy.spin_once(self.odometry_pub_world)
         else:
             raise ValueError("Reference must be 'mirte' or 'world'.")
+    
+    def set_tree(self, reference, edges, colours=None, widths=None):
+        """Sets the tree data."""
+        if reference == 'mirte':
+            self.tree_pub_mirte.set_markers(edges, colours, widths)
+            #rclpy.spin_once(self.tree_pub_mite)
+        elif reference == 'world':
+            self.tree_pub_world.set_markers(edges, colours, widths)
+            #rclpy.spin_once(self.tree_pub_world)
+        else:
+            raise ValueError("Reference must be 'mirte' or 'world'.")
         
+    def set_occupancy_grid(self, grid, resolution, origin=(0.0, 0.0), rotation=1.0):
+        """Sets the occupancy grid data."""
+        self.occupancy_pub_mirte.set_grid(grid, resolution, origin, rotation)
+        #rclpy.spin_once(self.occupancy_pub_mirte)
+    
     def set_pointcloud(self, reference, points, colors=None):
         """Sets the point cloud data."""
         if reference == 'mirte':
