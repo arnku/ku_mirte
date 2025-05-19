@@ -26,15 +26,22 @@ class TreePublisher(Node):
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self) # Create a listener for the transform
     
     def clear_previous_markers(self):
-        marker = Marker()
-        marker.action = Marker.DELETEALL
-        self.marker_pub.publish(marker)
+        for i in range(len(self.tree_edges) + 10):
+            marker = Marker()
+            marker.header.stamp = self.get_clock().now().to_msg()
+            marker.header.frame_id = self.target_frame
+            marker.ns = "rrt"
+            marker.id = i
+            marker.type = Marker.LINE_LIST
+            marker.action = Marker.DELETE
+            
+            self.marker_pub.publish(marker)
 
     def publish_markers(self):
         #print("Publishing markers")
         #print(self.tree_edges)
         if len(self.tree_edges) == 0:
-            self.get_logger().warn("No edges set! Call node.set_markers(edges, colours, widths) to set data.")
+            #self.get_logger().warn("No edges set! Call node.set_markers(edges, colours, widths) to set data.")
             return
         # No longer clear markers here
         for i, ((start, end), colour, width) in enumerate(zip(self.tree_edges, self.edge_colours, self.edge_widths)):

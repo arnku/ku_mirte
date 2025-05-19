@@ -224,7 +224,8 @@ class KU_Mirte:
         
     def set_occupancy_grid(self, grid, resolution, origin=(0.0, 0.0), rotation=1.0):
         """Sets the occupancy grid data."""
-        self.occupancy_pub_mirte.set_grid(grid, resolution, origin, rotation)
+        print(f"rotation: {rotation}")
+        self.occupancy_pub_mirte.set_grid(grid, resolution, origin, rotation=rotation)
         #rclpy.spin_once(self.occupancy_pub_mirte)
     
     def set_pointcloud(self, reference, points, colors=None):

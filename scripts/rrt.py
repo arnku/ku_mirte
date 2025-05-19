@@ -105,12 +105,16 @@ class RRT:
     """
     Rapidly-exploring Random Tree (RRT) planner.
     """
-    def __init__(self, robot_model, occ_map, expand_dis, path_resolution, max_iter=200):
+    def __init__(self, robot_model, occ_map, expand_dis, path_resolution, goal_radius = None, max_iter=200):
         self.robot = robot_model
         self.map = occ_map
         self.expand_dis = expand_dis
         self.path_resolution = path_resolution
         self.max_iter = max_iter
+        if goal_radius is None:
+            self.goal_radius = path_resolution
+        else:
+            self.goal_radius = goal_radius
         
         self.start = None
         self.end = None
@@ -151,7 +155,7 @@ class RRT:
         """
         Determine if a node is close enough to the goal.
         """
-        return node.calc_distance_to(self.end) < self.expand_dis
+        return node.calc_distance_to(self.end) < self.goal_radius
     
     def steer(self, from_node, to_node, extend_length=float("inf")):
         """
@@ -319,7 +323,7 @@ if __name__ == "__main__":
     marker_positions.append(start_pos)
     marker_positions.append(goal_pos)
     occ_map.populate(origins=marker_positions, radii=[marker_radius] * len(marker_positions))
-    mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution)
+    mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution, rotation=0.5)
 
     mirte.set_tree('mirte', edges, colours)
     

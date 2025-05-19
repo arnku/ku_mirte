@@ -12,7 +12,8 @@ class MovementPublisher(Node):
     """
     def __init__(self):
         super().__init__('movement_publisher')
-        self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
+        #self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
+        self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)
 
         self.lin_speed: float = 0.0
         self.ang_speed: float = 0.0

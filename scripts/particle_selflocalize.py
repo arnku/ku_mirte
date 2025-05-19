@@ -78,7 +78,7 @@ class Particles:
         return iter(self.particles)
 
 class ParticleFilter:
-    def __init__(self, area: tuple, num_particles: int = 100):
+    def __init__(self, area: tuple, num_particles: int = 100, starting_area: tuple = None):
         self.num_particles = num_particles
         self.particles = Particles(num_particles)
         
@@ -86,9 +86,17 @@ class ParticleFilter:
         self.area = area
         self.particles.positions = np.random.uniform(low=[area[0], area[1]], high=[area[2], area[3]], size=(num_particles, 2))
         self.particles.angles = np.random.uniform(low=0, high=2 * np.pi, size=num_particles)
+        if starting_area is not None:
+            self.particles.positions = np.random.uniform(low=[starting_area[0], starting_area[1]], high=[starting_area[2], starting_area[3]], size=(num_particles, 2))
 
         self.weights_used = "all"
 
+    @property
+    def variance(self) -> float:
+        """
+        Calculate the variance of the particles' positions.
+        """
+        return np.prod(np.var(self.particles.positions, axis=0))
 
     def _precompute_landmarks(self, landmarks: np.ndarray) -> tuple:
         """
@@ -242,15 +250,15 @@ class ParticleFilter:
     
 
 class SelfLocalizer:
-    def __init__(self, num_particles: int, landmarks: list, landmark_ids: list, bounds: tuple):
+    def __init__(self, num_particles: int, landmarks: list, landmark_ids: list, bounds: tuple, starting_area: tuple = None):
         self.landmarks = np.array(landmarks)
         self.landmark_id_index = {landmark_id: i for i, landmark_id in enumerate(landmark_ids)}
 
         self.num_particles = num_particles
         self.bounds = bounds
-        self.particle_filter = ParticleFilter(bounds, num_particles=num_particles)
+        self.particle_filter = ParticleFilter(bounds, num_particles=num_particles, starting_area=starting_area)
 
-    def update_drive(self, dist: float) -> None:
+    def update_drive(self, dist: float, sigma_x=0.1, sigma_y=0.1, sigma_theta=0.02) -> None:
         # Get angles of all particles as a vector
 
         # Calculate dx and dy vectors
@@ -260,12 +268,12 @@ class SelfLocalizer:
         # Move each particle using vectorized dx, dy
         self.particle_filter.particles.positions += np.column_stack((dx, dy))
 
-        self.add_uncertainty()
+        self.add_uncertainty(abs(sigma_x * dist), abs(sigma_y * dist), abs(sigma_theta * dist))
 
-    def update_turn(self, angle: float) -> None:
+    def update_turn(self, angle: float, sigma_x=0.001, sigma_y=0.001, sigma_theta=0.4) -> None:
         self.particle_filter.particles.angles += angle
 
-        self.add_uncertainty()
+        self.add_uncertainty(abs(sigma_x * angle), abs(sigma_y * angle), abs(sigma_theta * angle))
 
     def update_image(self, ids:list, distances: list, angles: list, lidars: list) -> None:
         distance_list = [None] * len(self.landmarks)
@@ -282,7 +290,7 @@ class SelfLocalizer:
         self.particle_filter.particle_weights(distance_list, angle_list, lidars, self.landmarks)
         #self.particle_filter.resample_particles()
 
-    def add_uncertainty(self, sigma_x=0.02, sigma_y=0.02, sigma_theta=0.1):
+    def add_uncertainty(self, sigma_x=0.02, sigma_y=0.02, sigma_theta=0.3) -> None:
         # Create uncertainty arrays
         x_uncertainty = np.random.normal(0, sigma_x, self.num_particles)
         y_uncertainty = np.random.normal(0, sigma_y, self.num_particles)

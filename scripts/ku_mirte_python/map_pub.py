@@ -29,7 +29,7 @@ class OccupancyMapPublisher(Node):
 
     def generate_occupancy_grid(self):
         if len(self.grid) == 0:
-            self.get_logger().warn("No grid set! Call node.set_grid(grid, resolution, origin, rotation) to set data.")
+            #self.get_logger().warn("No grid set! Call node.set_grid(grid, resolution, origin, rotation) to set data.")
             return
 
         height, width = self.grid.shape
@@ -46,6 +46,7 @@ class OccupancyMapPublisher(Node):
         msg.info.origin.position.x = transformed_origin.x - (width * self.resolution) / 2
         msg.info.origin.position.y = transformed_origin.y - (height * self.resolution) / 2
         msg.info.origin.position.z = 0.0
+        print(f"orientation: {self.rotation}")
         msg.info.origin.orientation.w = self.rotation
 
         msg.data = self.grid.flatten().tolist()  # Flatten the grid to a 1D list
