@@ -12,16 +12,6 @@ from ku_mirte import KU_Mirte
 from particle_selflocalize import SelfLocalizer
 import rrt
 
-CANVASS = False
-
-if CANVASS:
-    import tkinter as tk
-    CANVAS_WIDTH = 1200
-    CANVAS_HEIGHT = 1200
-    window = tk.Tk()
-    canvas = tk.Canvas(window, width=CANVAS_WIDTH, height=CANVAS_HEIGHT)
-
-
 def lidar_positions(measured_lidar: np.ndarray, lidar_diff_theshold: float = 5, lidar_max_dist: float = 20, object_size: tuple = (0.17,0.3)) -> np.ndarray:
     measured_lidar = np.array(measured_lidar, dtype=np.float64)
     measured_lidar[measured_lidar == np.inf] = lidar_max_dist
@@ -65,7 +55,7 @@ goal_order = [[4,4], [0,4], [4,0], [0,0]]
 iteration_time = time.time()
 drive_speed = 0.5 # m/s
 turn_speed = 0.5 # rad/s
-goal_margin = 1.0 # m
+goal_margin = 1.2 # m
 
 mirte = KU_Mirte()
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
@@ -163,191 +153,133 @@ def path_to_instructions(path, init_angle):
         instructions.append((angle_diff, math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])))
     return instructions
 
-
-
 instructions = None
 
-while cv2.waitKey(4) == -1: # Wait for a key pressed event
-
-    # Get sensor data
-    # Update belief
-    #
-    # If driving
-    #     Update drive delta
-    #     Add uncertainty
-    #
-    # If at goal
-    #    Set new goal
-    #
-    # If there is a path
-    #     If not driving
-    #         If low variance
-    #             Update occupancy map
-    #             Update path
-    #             Set new path segment
-    #         Else if high variance
-    #             Go to next path segment
-    #         Else if very high variance
-    #             Turn in place to update belief
-    #             Update path
-    #             Set new path segment
-    # Else if there is not a path
-    #     Upadte occupancy map
-    #     Update path
-    #     Set new path segment
-    #
-    # If not driving
-    #     Drive next path segment
-
-    # Get sensor data
+def update_sensors():
     image = mirte.get_image()
     lidar = mirte.get_lidar_ranges()
-    ids, distances, angles, aruco_points, aruco_colors = process_aruco_markers(image, aruco_dict, parameters, mirte, aruco_size)
-    lidar_dists, lidar_angles, lidar_points, lidar_colors = process_lidar_boxes(lidar, lidar_positions)
-    # Visualize markers and obstacles
+    ids, distances, angles, aruco_points, aruco_colors = process_aruco_markers(
+        image, aruco_dict, parameters, mirte, aruco_size
+    )
+    lidar_dists, lidar_angles, lidar_points, lidar_colors = process_lidar_boxes(
+        lidar, lidar_positions
+    )
+
+    # Combine and visualize
     points = aruco_points + lidar_points
     colors = aruco_colors + lidar_colors
     mirte.set_pointcloud('mirte', points, colors)
 
-    # Update Belief
-    #selflocalizer.random_positions(1)
+    return ids, distances, angles, lidar, lidar_dists, lidar_angles
+
+
+def update_localization(ids, distances, angles, lidar):
     selflocalizer.update_image(ids, distances, angles, lidar)
     selflocalizer.particle_filter.resample_particles()
+    
     # Visualize particles
-    points = []
-    colors = []
+    points, colors = [], []
     for p in selflocalizer.particle_filter.particles.positions:
         points.append([p[0], p[1], 0])
     for w in selflocalizer.particle_filter.particles.weights:
-        colors.append([0,0,255,min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
+        colors.append([0, 0, 255, min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
+    
     estimate = selflocalizer.particle_filter.estimate_pose()
     points.append([estimate.x, estimate.y, 0])
-    colors.append([0,255,255,255])
+    colors.append([0, 255, 255, 255])
     mirte.set_pointcloud('world', points, colors)
 
-    # Check if driving
-    if mirte.is_driving:
-        # Update drive delta and add uncertainty
-        delta_time = time.time() - iteration_time
-        delta_distance = delta_time * drive_speed
-        selflocalizer.update_drive(delta_distance)
+    return estimate
+
+
+def turn_in_place_until_localized():
+    mirte.drive(0, 0.5, 4 * math.pi, blocking=False)
+    while selflocalizer.particle_filter.variance > 0.0002 and mirte.is_driving:
         iteration_time = time.time()
-    
-    # Check if at goal
+        time.sleep(0.1)
+        ids, distances, angles, lidar, _, _ = update_sensors()
+        selflocalizer.random_positions(1)
+        update_localization(ids, distances, angles, lidar)
+        delta_time = time.time() - iteration_time
+        selflocalizer.update_turn(direction * delta_time * turn_speed)
+    mirte.stop()
+
+
+def update_path_and_instructions(estimate):
+    edges, colours, path = calculate_goal_and_path(estimate, goal_order[0], path_find)
+    mirte.set_tree('mirte', edges, colours)
+    return path_to_instructions(path, 0) if path else None
+
+
+def drive_instruction():
+    global iteration_time, direction
+    angle_instr, distance_instr = instructions[0]
+    direction = -1 if angle_instr > 0 else 1
+    mirte.drive(0, direction * 0.5, abs(angle_instr) * 2, blocking=False)
+
+    while mirte.is_driving:
+        iteration_time = time.time()
+        time.sleep(0.1)
+        ids, distances, angles, lidar, _, _ = update_sensors()
+        update_localization(ids, distances, angles, lidar)
+        selflocalizer.update_turn(direction * (time.time() - iteration_time) * turn_speed)
+
+    mirte.drive(0.5, 0, distance_instr * 5, blocking=False)
+    iteration_time = time.time()
+
+
+# Main control loop
+while cv2.waitKey(4) == -1:
+
+    ids, distances, angles, lidar, lidar_dists, lidar_angles = update_sensors()
+    estimate = update_localization(ids, distances, angles, lidar)
+
+    # Driving update
+    if mirte.is_driving:
+        delta_time = time.time() - iteration_time
+        selflocalizer.update_drive(delta_time * drive_speed)
+        iteration_time = time.time()
+
+    # Check goal
     print(f"Variance: {selflocalizer.particle_filter.variance:.4f}")
     if selflocalizer.particle_filter.variance < 0.0002:
-        if abs(goal_order[0][0] - estimate.x) < goal_margin and abs(goal_order[0][1] - estimate.y) < goal_margin:
-            print("")
-            print("!!!!!!!!!!!!!!!At goal!!!!!!!!!!!!!!!!!!!!!")
-            print("")
-            # Set new goal
+        if np.linalg.norm(np.array(estimate.position) - np.array(goal_order[0])) < goal_margin:
+            print("\n!!!!!!!!!!!!!!!At goal!!!!!!!!!!!!!!!!!!!!!\n")
             goal_order.pop(0)
-            if len(goal_order) == 0:
+            if not goal_order:
                 print("All goals reached")
                 break
             print(f"New goal: {goal_order[0]}")
             instructions = None
-    
-    
 
     time.sleep(0.1)
 
-    # Check if there is a path
-    if instructions is not None:
-        # Check if not driving
+    if instructions:
         if not mirte.is_driving:
-            # Check if low variance
             if selflocalizer.particle_filter.variance < 0.0001:
                 print("Low variance, updating occupancy map and path")
-                # Update occupancy map
-                marker_list = update_occupancy_map_and_markers(lidar_dists, lidar_angles, box_size, occ_map)
-                #mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution, rotation=0.5) # TODO: Fix this
-                # Update path
-                edges, colours, path = calculate_goal_and_path(estimate, goal_order[0], path_find)
-                mirte.set_tree('mirte', edges, colours)
-                if path is not None:
-                    print("***Making a new path***")
-                    instructions = path_to_instructions(path, 0) # TODO: find start angle
-                else:
-                    print("Could not find a path, keeping the current plan")
-                    instructions.pop(0)
-            # Check if high variance
-            elif selflocalizer.particle_filter.variance < 0.0002: 
-                print("High variance, keeping the current plan")
-                # Go to next path segment
-                instructions.pop(0)
-            else: # very high variance
-                print("Too high variance, turning in place")
-                mirte.drive(0,  0.5, 4 * math.pi, blocking=False)
-                # Turn in place to update belief
-                while selflocalizer.particle_filter.variance > 0.0002 and mirte.is_driving:
-                    iteration_time = time.time()
-                    time.sleep(0.1)
-                    image = mirte.get_image()
-                    ids, distances, angles, aruco_points, aruco_colors = process_aruco_markers(image, aruco_dict, parameters, mirte, aruco_size)
-                    mirte.set_pointcloud('mirte', aruco_points, aruco_colors)
-                    selflocalizer.random_positions(1) # kidnapped
-                    selflocalizer.update_image(ids, distances, angles, lidar)
-                    selflocalizer.particle_filter.resample_particles()
+                update_occupancy_map_and_markers(lidar_dists, lidar_angles, box_size, occ_map)
+                instructions = update_path_and_instructions(estimate) or instructions[1:]
 
-                    points = []
-                    colors = []
-                    for p in selflocalizer.particle_filter.particles.positions:
-                        points.append([p[0], p[1], 0])
-                    for w in selflocalizer.particle_filter.particles.weights:
-                        colors.append([0,0,255,min(255, 255 * w * selflocalizer.particle_filter.particles.num_particles)])
-                    
-                    mirte.stop()
-                    estimate = selflocalizer.particle_filter.estimate_pose()
-                    points.append([estimate.x, estimate.y, 0])
-                    colors.append([0,255,255,255])
-                    mirte.set_pointcloud('world', points, colors)
-                    
-                    delta_time = time.time() - iteration_time
-                    delta_rotation = delta_time * turn_speed
-                    selflocalizer.update_turn(direction * delta_rotation)
+            elif selflocalizer.particle_filter.variance < 0.0002:
+                print("High variance, keeping the current plan")
+                instructions.pop(0)
+
+            else:
+                print("Too high variance, turning in place")
+                turn_in_place_until_localized()
                 lidar = mirte.get_lidar_ranges()
-                lidar_dists, lidar_angles, lidar_points, lidar_colors = process_lidar_boxes(lidar, lidar_positions)
-                edges, colours, path = calculate_goal_and_path(estimate, goal_order[0], path_find)
-                mirte.set_tree('mirte', edges, colours)
-                instructions = path_to_instructions(path, 0)
+                lidar_dists, lidar_angles, _, _ = process_lidar_boxes(lidar, lidar_positions)
+                instructions = update_path_and_instructions(estimate)
         else:
             print("Driving, keeping the current plan")
-    else: # there is not a path
+    else:
         print("Path does not exist")
-        # Update occupancy map
-        marker_list = update_occupancy_map_and_markers(lidar_dists, lidar_angles, box_size, occ_map)
-        #mirte.set_occupancy_grid(occ_map.grid, occ_map.resolution, rotation=0.5) # TODO: Fix this
-        # Update path
-        edges, colours, path = calculate_goal_and_path(estimate, goal_order[0], path_find)
-        mirte.set_tree('mirte', edges, colours)
-        instructions = path_to_instructions(path, 0) # TODO: find start angle
+        update_occupancy_map_and_markers(lidar_dists, lidar_angles, box_size, occ_map)
+        instructions = update_path_and_instructions(estimate)
 
-    if CANVASS:
-        draw_canvas(canvas, occ_map, path_find, path, window)
-
-    # Check if not driving
-    if mirte.is_driving == False:
-        #input("-------------Press Enter to drive-------------")
-        angle_instr, distance_instr = (instructions[0][0], instructions[0][1])
-        direction = -1 if angle_instr > 0 else 1
-        mirte.drive(0,  direction * 0.5, abs(angle_instr) * 2, blocking=False)
-        
-        while mirte.is_driving:
-            iteration_time = time.time()
-            time.sleep(0.1)
-            image = mirte.get_image()
-            ids, distances, angles, aruco_points, aruco_colors = process_aruco_markers(image, aruco_dict, parameters, mirte, aruco_size)
-            mirte.set_pointcloud('mirte', aruco_points, aruco_colors)
-            selflocalizer.update_image(ids, distances, angles, lidar)
-            selflocalizer.particle_filter.resample_particles()
-            
-            delta_time = time.time() - iteration_time
-            delta_rotation = delta_time * turn_speed
-            selflocalizer.update_turn(direction * delta_rotation)
-
-        mirte.drive(0.5, 0, distance_instr * 5, blocking=False)
-        iteration_time = time.time()
+    if not mirte.is_driving and instructions:
+        drive_instruction()
     
 
 #cv2.destroyAllWindows() # Close the OpenCV windows
