@@ -75,18 +75,20 @@ class GridOccupancyMap:
         origins: list of circle centers
         radii: list of radii
         """
-        self.grid = np.zeros((self.n_grids[0], self.n_grids[1]), dtype=np.uint8) # Reset grid
-        
-        for i in range(self.n_grids[0]):
-            for j in range(self.n_grids[1]):
-                centroid = np.array([
-                    self.map_area[0][0] + self.resolution * (i + 0.5),
-                    self.map_area[0][1] + self.resolution * (j + 0.5),
-                ])
-                for o, r in zip(origins, radii):
-                    if np.linalg.norm(centroid - o) <= r:
-                        self.grid[i, j] = 100
-                        break
+        self.grid = np.zeros((self.n_grids[0], self.n_grids[1]), dtype=np.uint8)  # Reset grid
+
+        # Generate the x and y coordinates of the cell centroids
+        x_coords = self.map_area[0][0] + self.resolution * (np.arange(self.n_grids[0]) + 0.5)
+        y_coords = self.map_area[0][1] + self.resolution * (np.arange(self.n_grids[1]) + 0.5)
+        xv, yv = np.meshgrid(x_coords, y_coords, indexing='ij')  # Shape: (n_x, n_y)
+
+        centroids = np.stack((xv, yv), axis=-1)  # Shape: (n_x, n_y, 2)
+
+        for origin, radius in zip(origins, radii):
+            # Compute distance from all centroids to this obstacle center
+            dist_sq = np.sum((centroids - origin) ** 2, axis=-1)
+            mask = dist_sq <= radius ** 2
+            self.grid[mask] = 100
 
     def canvas_draw(self, canvas):
         """
@@ -332,8 +334,9 @@ if __name__ == "__main__":
         rrt.canvas_draw(path, canvas, resolution=path_res, low=(-4, -4), high=(4, 4))
         # Run RRT
         canvas.pack()
-    input("Press Enter to exit...")
+        input("Press Enter to exit...")
     
+    del mirte
     #window.mainloop()
     
     

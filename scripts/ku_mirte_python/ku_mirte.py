@@ -67,6 +67,10 @@ class KU_Mirte:
             self.pointcloud_pub_world.destroy_node()
         if hasattr(self, 'movement_pub') and self.movement_pub:
             self.movement_pub.destroy_node()
+        if hasattr(self, 'occupancy_pub_mirte') and self.occupancy_pub_mirte:
+            self.occupancy_pub_mirte.destroy_node()
+        if hasattr(self, 'tree_pub_mirte') and self.tree_pub_mirte:
+            self.tree_pub_mirte.destroy_node()
         
         rclpy.shutdown()
     

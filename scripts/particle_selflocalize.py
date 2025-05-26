@@ -317,19 +317,23 @@ class SelfLocalizer:
 def main():
     # Example usage
     area = (0, 0, 10, 10)  # Define the area as (x_min, y_min, x_max, y_max)
-    num_particles = 10
+    num_particles = 100
     landmarks = np.array([[1, 1], [2, 2], [3, 3]])  # Example landmarks
     landmark_ids = [1, 2, 4]
 
     localizer = SelfLocalizer(num_particles, landmarks, landmark_ids, area)
+    localizer.particle_filter.weights_used = "aruco"  
 
     # Simulate some movements and updates
-    localizer.update_drive(1.0)
-    localizer.update_turn(np.pi / 4)
+    #localizer.update_drive(1.0)
+    #localizer.update_turn(np.pi / 4)
     lidar_data = np.array([np.inf] * 360)
     lidar_data[100:130] = np.random.uniform(9, 10, 30)  # Simulate some lidar data
     lidar_data[210:230] = np.random.uniform(14, 15, 20)  # Simulate some lidar data
     localizer.update_image([1, 4], [1.5, 2.5], [0.5, 0.7], lidar_data)
+    localizer.particle_filter.resample_particles()
 
     estimated_pose = localizer.particle_filter.estimate_pose()
-    print(f"Estimated Pose: {estimated_pose}")
+
+if __name__ == "__main__":
+    main()

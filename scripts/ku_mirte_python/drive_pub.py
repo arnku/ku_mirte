@@ -10,14 +10,18 @@ class MovementPublisher(Node):
     This class is used to publish movement commands to the robot.
     Publishes Twist messages to the `/mirte_base_controller/cmd_vel_unstamped` topic.
     """
-    def __init__(self):
+    def __init__(self, speed_modifier=1.0, rotation_modifier=1.0):
         super().__init__('movement_publisher')
-        #self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
-        self.publisher_ = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)
+        self.publisher_mirte = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
+        self.publisher_gazebo = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)
 
         self.lin_speed: float = 0.0
         self.ang_speed: float = 0.0
         self.duration: float | None = 0.0
+
+        # Multiplier for the speed of the robot between the Gazebo and Mirte controller.
+        self.speed_modifier: float = speed_modifier  # Speed modifier to adjust the speed of the robot
+        self.rotation_modifier: float = rotation_modifier  # Rotation modifier to adjust the rotation speed of the robot
 
         self.start_drive_time: float = time.time()
         self.driving : bool = False
@@ -68,7 +72,8 @@ class MovementPublisher(Node):
         twist = Twist()
         twist.linear.x = 0.0
         twist.angular.z = 0.0
-        self.publisher_.publish(twist)
+        self.publisher_mirte.publish(twist)
+        self.publisher_gazebo.publish(twist)
 
     def _publish_volicity(self):
         """
@@ -86,7 +91,10 @@ class MovementPublisher(Node):
         twist = Twist()
         twist.linear.x = self.lin_speed
         twist.angular.z = self.ang_speed
-        self.publisher_.publish(twist)
+        self.publisher_gazebo.publish(twist)
+        twist.linear.x = self.lin_speed * self.speed_modifier
+        twist.angular.z = self.ang_speed * self.rotation_modifier
+        self.publisher_mirte.publish(twist)
         
 
 def main():
