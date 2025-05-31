@@ -58,19 +58,6 @@ def process_aruco_markers(image, aruco_dict, parameters, mirte, aruco_size):
             angles.append(angle)
     return ids, distances, angles, points, colors
 
-def update_occupancy_map_and_markers(positions, box_size, occ_map):
-    marker_list = []
-    for p in positions:
-
-        box_position_vector = np.array(p) - np.array(estimate.position)
-        box_position_angle = estimate.theta - np.arctan2(box_position_vector[1], box_position_vector[0])
-        box_position_x = np.cos(box_position_angle) * np.linalg.norm(box_position_vector)
-        box_position_y = np.sin(box_position_angle) * np.linalg.norm(box_position_vector)
-
-        marker_list.append([box_position_x, box_position_y])
-    occ_map.populate(marker_list, [box_size] * len(marker_list))
-    return marker_list
-
 def calculate_goal_and_path(estimate, goal_global_position, path_find):
     goal_position_vector = np.array(goal_global_position) - np.array(estimate.position)
     goal_position_angle = estimate.theta - np.arctan2(goal_position_vector[1], goal_position_vector[0])
@@ -175,7 +162,6 @@ def drive_instruction():
 
 
 
-fake_obstacles = [[0.5, 3], [3.8, 2.5]]
 # Main control loop
 while cv2.waitKey(4) == -1:
 
@@ -206,7 +192,6 @@ while cv2.waitKey(4) == -1:
         if not mirte.is_driving:
             if selflocalizer.particle_filter.variance < 0.0001:
                 print("Low variance, updating occupancy map and path")
-                update_occupancy_map_and_markers(fake_obstacles, box_size, occ_map)
                 instructions = update_path_and_instructions(estimate) or instructions[1:]
 
             elif selflocalizer.particle_filter.variance < 0.0002:
@@ -221,7 +206,6 @@ while cv2.waitKey(4) == -1:
             print("Driving, keeping the current plan")
     else:
         print("Path does not exist")
-        update_occupancy_map_and_markers(fake_obstacles, box_size, occ_map)
         instructions = update_path_and_instructions(estimate)
 
     if not mirte.is_driving and instructions:
