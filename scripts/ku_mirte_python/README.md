@@ -43,7 +43,7 @@ Sets modifiers for linear and angular velocity, only affecting real robot drivin
 Drives the robot with given linear and angular speed for a specified duration.
 - `lin_speed`: meters per second.
 - `ang_speed`: radians per second.
-- `duration`: seconds (0.0 for indefinite).
+- `duration`: seconds (None for indefinite).
 - `blocking`: waits for completion if `True`.
 
 ### `stop()`

@@ -156,7 +156,7 @@ class KU_Mirte:
         Args:
             lin_speed (float): Linear velocity (m/s). Positive is forward.
             ang_speed (float): Angular velocity (rad/s). Positive is left.
-            duration (float): Duration in seconds. 0.0 means drive indefinitely.
+            duration (float): Duration in seconds. None means drive indefinitely.
             blocking (bool): If True, waits for drive to finish before returning.
         """
         self.movement_pub.drive(float(lin_speed), float(ang_speed), duration)
