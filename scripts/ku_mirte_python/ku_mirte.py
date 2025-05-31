@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 import threading
+import numpy as np
 
 import time
 
@@ -41,6 +42,16 @@ class KU_Mirte:
         self.k_matrix = self.camera_sub.k_matrix # Camera intrinsic matrix
         self.d_matrix = self.camera_sub.d_matrix # Camera distortion
         self.p_matrix = self.camera_sub.p_matrix # Camera projection matrix
+
+        # Check if k_matrix is set, if not, set it to a default value
+        if self.k_matrix is None or np.all(self.k_matrix == 0) or self.k_matrix.shape != (3, 3):
+            self.k_matrix = np.array([[590.0, 0.0, 320.0],
+                                      [0.0, 590.0, 240.0],
+                                      [0.0, 0.0, 1.0]])
+        # Check if d_matrix is set, if not, set it to a default value
+        if self.d_matrix is None or np.all(self.d_matrix == 0) or self.d_matrix.shape != (5,):
+            self.d_matrix = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+                    
 
         print("KU Mirte initialized.")
 
