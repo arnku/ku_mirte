@@ -10,7 +10,7 @@ class MovementPublisher(Node):
     This class is used to publish movement commands to the robot.
     Publishes Twist messages to the `/mirte_base_controller/cmd_vel_unstamped` topic.
     """
-    def __init__(self, speed_modifier=1.0, rotation_modifier=1.0):
+    def __init__(self, speed_modifier=2.4, rotation_modifier=3.4):
         super().__init__('movement_publisher')
         self.publisher_mirte = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
         self.publisher_gazebo = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)

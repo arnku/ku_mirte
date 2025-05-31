@@ -124,6 +124,21 @@ class KU_Mirte:
             self.executor = None
             self.executor_thread = None
 
+    def set_driving_modifier(self, speed_modifier = 2.4, turn_modifier = 3.4):
+        """
+        Sets the speed and rotation modifier for the robot.
+        This is used to adjust the speed and rotation of the robot when driving.
+        
+        Parameters:
+            speed_modifier (float): The speed modifier for the robot. 
+                                    1.0 is normal speed, 0.5 is half speed, etc.
+            turn_modifier (float): The rotation modifier for the robot. 
+                                   1.0 is normal rotation, 0.5 is half rotation, etc.
+        """
+        self.movement_pub.speed_modifier = float(speed_modifier)
+        self.movement_pub.rotation_modifier = float(turn_modifier)
+
+
     def drive(self, lin_speed, ang_speed, duration, blocking=True):
         """
         Drive the robot with a given speed and direction for a given duration.
