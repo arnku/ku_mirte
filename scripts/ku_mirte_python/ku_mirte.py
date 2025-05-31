@@ -1,10 +1,17 @@
+"""
+KU_Mirte class and related methods for robot control and sensor access in ROS2.
+
+This module provides the KU_Mirte class, which acts as a high-level interface for controlling a Mirte robot in a ROS2 environment. It includes methods for driving, sensor access, and publishing various data types such as odometry, trees, occupancy grids, and point clouds.
+
+Classes:
+    KU_Mirte: Main class for robot control and sensor access.
+"""
+
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
 import threading
 import numpy as np
-
 import time
-
 from robot_pos_sub import PositionSubscriber
 from camera_sub import CameraSubscriber
 from lidar_sub import LidarSubscriber
@@ -16,7 +23,16 @@ from tree_pub import TreePublisher
 from map_pub import OccupancyMapPublisher
 
 class KU_Mirte:
+    """
+    High-level interface for controlling a Mirte robot and accessing its sensors in ROS2.
+
+    This class initializes all required ROS2 nodes and provides methods for driving the robot, accessing sensor data, and publishing visualization data.
+    """
     def __init__(self):
+        """
+        Initializes all robot components, ROS2 nodes, and starts the executor thread.
+        Sets up publishers and subscribers for position, camera, lidar, sonar, odometry, tree, point cloud, and occupancy grid.
+        """
         print("Initiating components")
         rclpy.init()
         self.robot_pos_sub = PositionSubscriber()
@@ -56,8 +72,9 @@ class KU_Mirte:
         print("KU Mirte initialized.")
 
     def __del__(self):
-        """Ensure that nodes are properly destroyed when the object is deleted."""
-        
+        """
+        Ensures that all ROS2 nodes are properly destroyed and the executor is shut down when the object is deleted.
+        """
         self._stop_executor_thread()
 
         if hasattr(self, 'robot_pos_sub') and self.robot_pos_sub:
@@ -85,33 +102,11 @@ class KU_Mirte:
         
         rclpy.shutdown()
     
-    def get_position(self):
-        """Returns the most recent position of the robot."""
-        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
-        return self.robot_pos_sub.get_position()
-    
-    def get_rotation(self):
-        """Returns the most recent rotation of the robot."""
-        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
-        return self.robot_pos_sub.get_rotation()
-
-    @property
-    def position(self):
-        """Property that updates and returns the position."""
-        position = self.get_position()
-        if position is None:
-            print("Position not initialized...")
-        return position
-    
-    @property
-    def rotation(self):
-        """Property that updates and returns the rotation."""
-        rotation = self.get_rotation()
-        if rotation is None:
-            print("Rotation not initialized...")
-        return rotation
     
     def _start_executor_thread(self):
+        """
+        Starts the ROS2 MultiThreadedExecutor in a separate thread and adds all relevant nodes.
+        """
         print("Starting executor thread...")
         self.executor = MultiThreadedExecutor()
 
@@ -129,40 +124,40 @@ class KU_Mirte:
         print("Executor thread started.")
     
     def _stop_executor_thread(self):
+        """
+        Stops the executor thread and shuts down the executor if running.
+        """
         if hasattr(self, 'executor_thread') and self.executor_thread:
             self.executor.shutdown()
             self.executor_thread.join()
             self.executor = None
             self.executor_thread = None
 
-    def set_driving_modifier(self, speed_modifier = 2.4, turn_modifier = 3.4):
+    def set_driving_modifier(self, speed_modifier:float = 2.4, turn_modifier:float = 3.4):
         """
-        Sets the speed and rotation modifier for the robot.
-        This is used to adjust the speed and rotation of the robot when driving.
-        
-        Parameters:
-            speed_modifier (float): The speed modifier for the robot. 
-                                    1.0 is normal speed, 0.5 is half speed, etc.
-            turn_modifier (float): The rotation modifier for the robot. 
-                                   1.0 is normal rotation, 0.5 is half rotation, etc.
+        Sets the speed and rotation modifier for the robot's driving behavior. 
+        Is multiplied with the linear and angular speed when driving. 
+        This is only applied to real driving, not in simulation as the simulation is accurate.
+        Args:
+            speed_modifier (float): Multiplier for linear speed. 1.0 is normal speed.
+            turn_modifier (float): Multiplier for angular speed. 1.0 is normal rotation.
         """
         self.movement_pub.speed_modifier = float(speed_modifier)
         self.movement_pub.rotation_modifier = float(turn_modifier)
 
 
-    def drive(self, lin_speed, ang_speed, duration, blocking=True):
+    def drive(self, lin_speed:float, ang_speed:float, duration:float|None, blocking:bool=True):
         """
-        Drive the robot with a given speed and direction for a given duration.
-        If duration is `0.0`, the robot will drive forever.
-        Blocking will wait for the drive to finish before continuing. 
-        Disabling blocking will allow for the robot to drive while the script continues.
-        The Robot can be stopped at any time by calling `stop()`.
-
-        Parameters:
-            lin_speed (float): The linear velocity (m/s) of the robot. Positive values drive forward, negative values drive backward.
-            ang_speed (float): The angular velocity (rad/s) of the robot. Positive values turn left, negative values turn right.
-            duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
-            blocking (bool): If `True`, the function will wait for the drive to finish before continuing. If `False`, the function will return immediately.
+        Drives the robot with a given linear and angular speed for a specified duration.
+        Speeds are in meters per second (m/s) for linear speed and radians per second (rad/s) for angular speed.
+        The distance driven is calculated as d = lin_speed * duration, 
+        and the angle turned is calculated as r = ang_speed * duration (in radians).
+        For example, if ang_speed is 0.5 rad/s and duration is 2*pi seconds, the robot will turn pi radians (180 degrees).
+        Args:
+            lin_speed (float): Linear velocity (m/s). Positive is forward.
+            ang_speed (float): Angular velocity (rad/s). Positive is left.
+            duration (float): Duration in seconds. 0.0 means drive indefinitely.
+            blocking (bool): If True, waits for drive to finish before returning.
         """
         self.movement_pub.drive(float(lin_speed), float(ang_speed), duration)
         
@@ -170,68 +165,145 @@ class KU_Mirte:
         while blocking and self.movement_pub.driving: # Blocking
             time.sleep(0.01) # Robot can stop during this sleep, it is only to prevent the function from returning before the drive is finished.
     
-    def tank_drive(self, left_speed, right_speed, duration, blocking=True):
-        """
-        Drive the robot with a given left and right speed for a given duration.
-        If duration is `0.0`, the robot will drive forever.
-        Blocking will wait for the drive to finish before continuing. 
-        Disabling blocking will allow for the robot to drive while the script continues.
-        The Robot can be stopped at any time by calling `stop()`.
-
-        Parameters:
-            left_speed (float): The left wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
-            right_speed (float): The right wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
-            duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
-            blocking (bool): If `True`, the function will wait for the drive to finish before continuing. If `False`, the function will return immediately.
-        """
-
-        #TODO: THIS ABVIOUSLY IS WRONG???? USE MORE DIRECT APPROACH
-
-        self.movement_pub.tank_drive(left_speed, right_speed, duration)
-        
-        time.sleep(0.1) # Allow time for the thread to realize it is driving
-        while blocking and self.movement_pub.driving: # Blocking
-            time.sleep(0.01)
-    
     def stop(self):
-        """Stops the robot."""
+        """
+        Stops the robot's movement immediately.
+        """
         self.movement_pub.stop()
 
     @property
-    def is_driving(self):
-        """Returns True if the robot is driving, False otherwise."""
+    def is_driving(self) -> bool:
+        """
+        Returns True if the robot is currently driving, False otherwise.
+        Returns:
+            bool: Driving state.
+        """
         return self.movement_pub.driving
 
-    def get_image(self):
-        """Returns the most recent image from the camera."""
+    def get_position(self):
+        """
+        Returns the most recent position of the robot as a tuple or array.
+        Returns:
+            The robot's position. Use .x, .y, .z for individual coordinates.
+        """
+        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
+        return self.robot_pos_sub.get_position()
+    
+    @property
+    def position(self):
+        """
+        Property that updates and returns the robot's position.
+        Returns:
+            The robot's position. Use .x, .y, .z for individual coordinates.
+        """
+        position = self.get_position()
+        if position is None:
+            print("Position not initialized...")
+        return position
+ 
+    def get_rotation(self) -> float:
+        """
+        Returns the most recent rotation of the robot.
+        Returns:
+            The robot's rotation in radians.
+        """
+        rclpy.spin_once(self.robot_pos_sub, timeout_sec = 2.0)
+        return self.robot_pos_sub.get_rotation()
+    
+    @property
+    def rotation(self) -> float:
+        """
+        Property that updates and returns the robot's rotation.
+        Returns:
+            The robot's rotation in radians
+        """
+        rotation = self.get_rotation()
+        if rotation is None:
+            print("Rotation not initialized...")
+        return rotation
+
+    def get_image(self) -> np.ndarray:
+        """
+        Returns the most recent image from the robot's camera.
+        Returns:
+            Image data (numpy array)
+        """
         #rclpy.spin_once(self.camera_sub)
         return self.camera_sub.image()
     
-    def get_lidar_ranges(self):
-        """Returns the most recent lidar ranges."""
+    @property
+    def image(self) -> np.ndarray:
+        """
+        Returns the most recent image from the robot's camera.
+        Returns:
+            Image data (numpy array)
+        """
+        return self.get_image()
+    
+    def get_lidar_ranges(self) -> list:
+        """
+        Returns the most recent lidar data. 
+        Is a list of floats representing distances in meters.
+        They are evenly spaced in a circle, so the angular distance between each point is 2*pi / len(ranges).
+        Returns:
+            Lidar data (list of floats).
+        """
         #rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.ranges()
-    
-    def get_lidar_section(self, start_angle, end_angle):
+
+    @property
+    def lidar(self) -> list:
+        """
+        Returns the most recent lidar data.
+        Is a list of floats representing distances in meters.
+        They are evenly spaced in a circle, so the angular distance between each point is 2*pi / len(ranges).
+        Returns:
+            Lidar data (list of floats).
+        """
+        return self.get_lidar_ranges()
+        
+    def get_lidar_section(self, start_angle:float, end_angle:float) -> list:
         """
         Returns the lidar ranges for a given angle section.
-        The start_angle and end_angle are in radians from -pi to pi. 
-        Here 0 is straight ahead, pi/2 is to the left, and -pi/2 is to the right.
-
-        Parameters:
-            start_angle (float): The start angle of the section in radians.
-            end_angle (float): The end angle of the section in radians.
+        The angles are in radians, where -pi is the left side, 0 is forward, and pi is right side.
+        Args:
+            start_angle (float): Start angle in radians (-pi to pi).
+            end_angle (float): End angle in radians (-pi to pi).
+        Returns:
+            Section of lidar range data (list of floats).
         """
         #rclpy.spin_once(self.lidar_sub)
         return self.lidar_sub.angle_section(start_angle, end_angle)
 
-    def get_sonar_ranges(self):
-        """Returns the most recent sonar ranges."""
+    def get_sonar_ranges(self) -> dict:
+        """
+        Returns the most recent sonar range data.
+        Returns:
+            Sonar range data as a dictionary of floats in meters with keys 'front_left', 'front_right', 'rear_left', 'rear_right'.
+        """
         #rclpy.spin_once(self.sonar_sub)
         return self.sonar_sub.get_distances()
 
-    def set_odometry(self, reference, position, rotation):
-        """Sets the odometry position and rotation."""
+    @property
+    def sonar(self) -> dict:
+        """
+        Returns the most recent sonar range data.
+        Returns:
+            Sonar range data as a dictionary of floats in meters with keys 'front_left', 'front_right', 'rear_left', 'rear_right'.
+        """
+        return self.get_sonar_ranges()
+
+    def set_odometry(self, reference: str, position: list, rotation:list):
+        """
+        Sets the odometry position and rotation for the robot.
+        The reference can be either 'mirte' or 'world', which determines the coordinate frame used.
+        Args:
+            reference (str): 'mirte' or 'world'. If 'mirte', sets the position in the Mirte frame. If 'world', sets the position in the world frame.
+            position: Position data like [x, y, z] 
+            rotation: Rotation data as quaternion in list [x, y, z, w].
+        Raises:
+            ValueError: If reference is not 'mirte' or 'world'.
+        """
         if reference == 'mirte':
             self.odometry_pub_mirte.set_position(position, rotation)
             rclpy.spin_once(self.odometry_pub_mirte)
@@ -241,25 +313,46 @@ class KU_Mirte:
         else:
             raise ValueError("Reference must be 'mirte' or 'world'.")
     
-    def set_tree(self, reference, edges, colours=None, widths=None):
-        """Sets the tree data."""
+    def set_tree(self, reference:str, edges:list, colours:list|None=None, widths:list|None=None):
+        """
+        Sets the tree visualization data for the robot.
+        Args:
+            reference (str): 'mirte' or 'world'. If 'mirte', sets the tree in the Mirte frame. If 'world', sets the tree in the world frame.
+            edges: Tree edge data. Should be a list of tuples or list of lists, where each tuple/list contains two points (start and end) as (x, y) coordinates. For example: [([1, 2], [3, 4]), ([3, 4], [5, 6])] will make an edge from (1, 2) to (3, 4) and another from (3, 4) to (5, 6).
+            colours: Optional color data. If not provided, defaults to white (255, 255, 255, 255). Otherwise, should be the same length as edges and contain (r, g, b, a) values for each edge in range [0,255].
+            widths: Optional width of each edge. If not provided, defaults to 0.01 for all edges. Should be the same length as edges.
+        Raises:
+            ValueError: If reference is not 'mirte' or 'world'.
+        """
         if reference == 'mirte':
             self.tree_pub_mirte.set_markers(edges, colours, widths)
-            #rclpy.spin_once(self.tree_pub_mite)
         elif reference == 'world':
             self.tree_pub_world.set_markers(edges, colours, widths)
-            #rclpy.spin_once(self.tree_pub_world)
         else:
             raise ValueError("Reference must be 'mirte' or 'world'.")
         
-    def set_occupancy_grid(self, grid, resolution, origin=(0.0, 0.0), rotation=1.0):
-        """Sets the occupancy grid data."""
+    def set_occupancy_grid(self, grid:list, resolution:float, origin:tuple=(0.0, 0.0), rotation:float=1.0):
+        """
+        Visualizes the occupancy grid data. 
+        Args:
+            grid: Occupancy grid as a 2D list or numpy array. Value is a color grayscale value from 0 to 100, where 0 is free space, 100 is occupied, and -1 is unknown.
+            resolution: Grid resolution. This is the size of each cell in meters. For example, a resolution of 0.1 means each cell is 10cm x 10cm.
+            origin (tuple): Origin of the grid (default (0.0, 0.0)) which is Mirte's position in the world frame.
+            rotation (float): Grid rotation (default 1.0). Rotates around Mirte's orientation.
+        """
         print(f"rotation: {rotation}")
         self.occupancy_pub_mirte.set_grid(grid, resolution, origin, rotation=rotation)
-        #rclpy.spin_once(self.occupancy_pub_mirte)
     
-    def set_pointcloud(self, reference, points, colors=None):
-        """Sets the point cloud data."""
+    def set_pointcloud(self, reference:str, points:list, colors:list=None):
+        """
+        Sets the point cloud data for the robot.
+        Args:
+            reference (str): 'mirte' or 'world'. If 'mirte', sets the point cloud in the Mirte frame. If 'world', sets the point cloud in the world frame.
+            points: Point cloud data. Should be a list of tuples or lists, where each tuple/list contains three coordinates (x, y, z). 
+            colors: Optional color data. If not provided, defaults to white (255, 255, 255, 255). Otherwise, should be the same length as points and contain (r, g, b, a) values for each point in range [0,255].
+        Raises:
+            ValueError: If reference is not 'mirte' or 'world'.
+        """
         if reference == 'mirte':
             self.pointcloud_pub_mirte.set_points(points, colors)
             #rclpy.spin_once(self.pointcloud_pub_mirte)
@@ -268,4 +361,4 @@ class KU_Mirte:
             #rclpy.spin_once(self.pointcloud_pub_world)
         else:
             raise ValueError("Reference must be 'mirte' or 'world'.")
-    
+
