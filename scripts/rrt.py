@@ -205,7 +205,7 @@ class RRT:
         self.end = self.Node(goal_pos)
         self.node_list = [self.start]
 
-        for _ in range(self.max_iter):
+        for i in range(self.max_iter):
             # Try to reach the goal
             end_node = self.Node(self.end.pos)
             nearest_end_node = self.get_nearest_node(end_node) # nearest node to random location
@@ -223,49 +223,6 @@ class RRT:
             if self.is_goal_reached(new_node):
                 return self.generate_final_course(len(self.node_list) - 1)
         return None
-
-    def canvas_draw(self, path, canvas, low, high, point_size=5, line_width=2, scale = 100):
-        canvas.create_oval(
-            (self.start.pos[0] - low[0]) * scale - point_size // 2,
-            (self.start.pos[1] - low[1]) * scale - point_size // 2,
-            (self.start.pos[0] - low[0]) * scale + point_size // 2,
-            (self.start.pos[1] - low[1]) * scale + point_size // 2,
-            fill="blue", outline="blue"
-        )
-        canvas.create_oval(
-            (self.end.pos[0] - low[0]) * scale - point_size // 2,
-            (self.end.pos[1] - low[1]) * scale - point_size // 2,
-            (self.end.pos[0] - low[0]) * scale + point_size // 2,
-            (self.end.pos[1] - low[1]) * scale + point_size // 2,
-            fill="red", outline="red"
-        )
-        # Draw the tree
-        for node in self.node_list:
-            if node.parent:
-                tree = np.array([node.parent.pos] + node.path)
-                for i in range(1, len(tree)):
-                    canvas.create_line(
-                        (tree[i - 1][0] - low[0]) * scale,
-                        (tree[i - 1][1] - low[1]) * scale,
-                        (tree[i][0] - low[0]) * scale,
-                        (tree[i][1] - low[1]) * scale,
-                        width=line_width,
-                        fill="green"
-                    )
-
-        # Draw the path
-        if path is not None:
-            for i in range(len(path) - 1):
-                x1, y1 = path[i]
-                x2, y2 = path[i + 1]
-                canvas.create_line(
-                    (x1 - low[0]) * scale,
-                    (y1 - low[1]) * scale,
-                    (x2 - low[0]) * scale,
-                    (y2 - low[1]) * scale,
-                    width=line_width,
-                    fill="red"
-                )
 
 
 if __name__ == "__main__":
