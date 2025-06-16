@@ -133,7 +133,7 @@ class KU_Mirte:
             self.executor = None
             self.executor_thread = None
 
-    def set_driving_modifier(self, speed_modifier:float = 2.4, turn_modifier:float = 3.4):
+    def set_driving_modifier(self, speed_modifier:float = 2.38, turn_modifier:float = 2.38):
         """
         Sets the speed and rotation modifier for the robot's driving behavior. 
         Is multiplied with the linear and angular speed when driving. 
@@ -146,7 +146,7 @@ class KU_Mirte:
         self.movement_pub.rotation_modifier = float(turn_modifier)
 
 
-    def drive(self, lin_speed:float, ang_speed:float, duration:float|None, blocking:bool=True):
+    def drive(self, lin_speed:float|list, ang_speed:float, duration:float|None, blocking:bool=True, interrupt:bool=True):
         """
         Drives the robot with a given linear and angular speed for a specified duration.
         Speeds are in meters per second (m/s) for linear speed and radians per second (rad/s) for angular speed.
@@ -154,14 +154,15 @@ class KU_Mirte:
         and the angle turned is calculated as r = ang_speed * duration (in radians).
         For example, if ang_speed is 0.5 rad/s and duration is 2*pi seconds, the robot will turn pi radians (180 degrees).
         Args:
-            lin_speed (float): Linear velocity (m/s). Positive is forward.
+            lin_speed (float): Linear velocity (m/s). Positive is forward, negative values drive backward.  Can either be a float or a list with two floats. Using float will drive the robot in the x direction, using a list will drive the robot in the x and y direction.
             ang_speed (float): Angular velocity (rad/s). Positive is left.
-            duration (float): Duration in seconds. None means drive indefinitely.
-            blocking (bool): If True, waits for drive to finish before returning.
+            duration (float): Duration in seconds. `None` means drive indefinitely.
+            blocking (bool): If `True`, waits for drive to finish before returning.
+            interrupt (bool): If `True`, interrupts any current drive. If `False`, does not interrupt the current drive.
         """
-        self.movement_pub.drive(float(lin_speed), float(ang_speed), duration)
+        self.movement_pub.drive(lin_speed, ang_speed, duration, interrupt=interrupt)
         
-        time.sleep(0.1) # Allow time for the thread to realize it is driving
+        time.sleep(0.2) # Allow time for the thread to realize it is driving
         while blocking and self.movement_pub.driving: # Blocking
             time.sleep(0.01) # Robot can stop during this sleep, it is only to prevent the function from returning before the drive is finished.
     

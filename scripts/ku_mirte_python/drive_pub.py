@@ -10,12 +10,12 @@ class MovementPublisher(Node):
     This class is used to publish movement commands to the robot.
     Publishes Twist messages to the `/mirte_base_controller/cmd_vel_unstamped` topic.
     """
-    def __init__(self, speed_modifier=2.4, rotation_modifier=3.4):
+    def __init__(self, speed_modifier=2.38, rotation_modifier=2.38):
         super().__init__('movement_publisher')
         self.publisher_mirte = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel', 10)
         self.publisher_gazebo = self.create_publisher(Twist, '/mirte_base_controller/cmd_vel_unstamped', 10)
 
-        self.lin_speed: float = 0.0
+        self.lin_speed: float|list = 0.0
         self.ang_speed: float = 0.0
         self.duration: float | None = 0.0
 
@@ -28,7 +28,7 @@ class MovementPublisher(Node):
 
         self.timer = self.create_timer(0.05, self._publish_volicity) 
 
-    def drive(self, lin_speed: float, ang_speed: float, duration: float, interrupt:bool=True):
+    def drive(self, lin_speed: list|float, ang_speed: float, duration: float, interrupt:bool=True):
         """
         Drive the robot with a given speed and direction for a given duration.
         If duration is None, the robot will drive forever.
@@ -36,9 +36,9 @@ class MovementPublisher(Node):
         If it however is `False`, the current drive will not be interrupted.
 
         Parameters:
-            lin_speed (float): The linear velocity (m/s) of the robot. Positive values drive forward, negative values drive backward.
+            lin_speed (float | list): The linear velocity (m/s) of the robot. Positive values drive forward, negative values drive backward. Can either be a float or a list with two floats. Using float will drive the robot in the x direction, using a list will drive the robot in the x and y direction.
             ang_speed (float): The angular velocity (rad/s) of the robot. Positive values turn left, negative values turn right.
-            duration (float): The duration (seconds) of the drive. If `0.0`, the robot will drive forever.
+            duration (float): The duration (seconds) of the drive. If `None`, the robot will drive forever.
             interrupt (bool): If `True`, the current drive will be interrupted. If `False`, the current drive will not be interrupted.
         """
         if self.driving:
@@ -49,18 +49,6 @@ class MovementPublisher(Node):
         self.ang_speed = ang_speed
         self.duration = duration
         self.start_drive_time = time.time()        
-    
-    def tank_drive(self, left_speed: float, right_speed: float, duration: float, interrupt:bool=True):
-        """
-        Drive the robot with a given left and right speed for a given duration.
-        If duration is `None`, the robot will drive forever.
-
-        Parameters:
-            left_speed (float): The left wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
-            right_speed (float): The right wheel speed (m/s) of the robot. Positive values drive forward, negative values drive backward.
-            duration (float): The duration (seconds) of the drive. If `None`, the robot will drive forever.
-        """
-        self.drive((left_speed + right_speed) / 2, (right_speed - left_speed) / 2, duration, interrupt) 
 
     def stop(self):
         """
@@ -71,6 +59,7 @@ class MovementPublisher(Node):
         self.duration = 0.0
         twist = Twist()
         twist.linear.x = 0.0
+        twist.linear.y = 0.0
         twist.angular.z = 0.0
         self.publisher_mirte.publish(twist)
         self.publisher_gazebo.publish(twist)
@@ -89,13 +78,24 @@ class MovementPublisher(Node):
 
         self.driving = True
         twist = Twist()
-        twist.linear.x = self.lin_speed
-        twist.angular.z = self.ang_speed
+
+        if isinstance(self.lin_speed, list):
+            if len(self.lin_speed) != 2:
+                raise ValueError("lin_speed must be a float or a list of length 2")
+            twist.linear.x = float(self.lin_speed[0])
+            twist.linear.y = float(self.lin_speed[1])
+        else:
+            if not isinstance(self.lin_speed, (int, float)):
+                raise ValueError("lin_speed must be a float or a list of length 2")
+            twist.linear.x = float(self.lin_speed)
+        twist.angular.z = float(self.ang_speed)
+
         self.publisher_gazebo.publish(twist)
-        twist.linear.x = self.lin_speed * self.speed_modifier
-        twist.angular.z = self.ang_speed * self.rotation_modifier
+        twist.linear.x *= self.speed_modifier
+        twist.linear.y *= self.speed_modifier
+        twist.angular.z *= self.rotation_modifier
         self.publisher_mirte.publish(twist)
-        
+
 
 def main():
     print("Initializing")
@@ -117,6 +117,10 @@ def main():
     node.drive(0.5, 0.0, 3.0)
 
     time.sleep(1)
+
+    node.drive([0.0,1.0], 0.0, 3.0)
+
+    time.sleep(2)
 
     print("Stoppig")
     node.stop()
